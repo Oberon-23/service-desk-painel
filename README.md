@@ -8,7 +8,7 @@ Projeto de portfólio de [Breno Silva](https://github.com/Oberon-23). Mesma iden
 
 | Tela | O que responde |
 |---|---|
-| **Central ao vivo** | Como a fila se comporta agora? Simulação 3D (filas, mesas do N1 e do N2, contatos resolvidos, escalados e desistências), placar do dia, controle das posições de atendimento (logar, pausar e deslogar cada analista na sua PA, com o nome dele em cima da mesa na cena 3D) e nível de serviço hora a hora. Controles: analistas no N1 e no N2, volume, tempo médio de atendimento, resolução no primeiro contato, portal de autoatendimento e segunda-feira de manhã. |
+| **Central ao vivo** | Como a fila se comporta agora? Simulação 3D (filas, mesas do N1 e do N2, contatos resolvidos, escalados e desistências), placar do dia, controle das posições de atendimento (logar, pausar com motivo e deslogar cada analista na sua PA, com o nome dele em cima da mesa na cena 3D), aderência à escala com alerta de pausa acima do limite, chamados do N2 por prazo de SLA (P1 a P4, vencidos e em risco primeiro) e nível de serviço hora a hora. Controles: analistas no N1 e no N2, volume, tempo médio de atendimento, resolução no primeiro contato, portal de autoatendimento e segunda-feira de manhã. |
 | **Dimensionamento** | Quantas pessoas cada hora precisa para atender 80% em até 60 s? Escala mínima por hora contra a equipe fixa de hoje, custo da diferença e quanto cada analista a mais rende. |
 | **Sobre o projeto** | O modelo, as fórmulas e como foi construído. |
 
@@ -31,7 +31,7 @@ React 19 + TypeScript, Vite, React Router, **three.js** (carregado só na aba ao
 ## Testes
 
 - `npm test`: fórmulas do modelo (Erlang C, cenários, escala ideal).
-- `npm run build && npm run e2e`: as telas no computador e no celular, sem erro no console nem rolagem lateral; a simulação andando, pausa, controles de “e se”, seleção de analista, logar/pausar/deslogar nas PAs, dimensionamento e acessibilidade (WCAG 2.1 AA) no tema claro e no escuro. Roda no CI a cada envio, com os cabeçalhos de segurança da Vercel.
+- `npm run build && npm run e2e`: as telas no computador e no celular, sem erro no console nem rolagem lateral; a simulação andando, pausa, controles de “e se”, seleção de analista, logar/pausar/deslogar nas PAs, alerta de pausa estourada, ordem dos chamados do N2 por prazo, dimensionamento e acessibilidade (WCAG 2.1 AA) no tema claro e no escuro. Roda no CI a cada envio, com os cabeçalhos de segurança da Vercel.
 
 ## Rodar
 

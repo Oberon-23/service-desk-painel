@@ -9,17 +9,9 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { ABRE, chegadas, FECHA, PACIENCIA_MIN, TMA_N2, tmaEfetivo, type Cenario } from '../fila';
-
-export type EstadoMesa = 'livre' | 'atendendo' | 'pausa' | 'fora';
-export type Selecao = { nivel: 1 | 2; pa: number; nome: string };
-/** Quem está logado em cada posição de atendimento (PA). */
-export type Posto = { nivel: 1 | 2; pa: number; nome: string; estado: 'logado' | 'pausa' };
-export const MAX_N1 = 14, MAX_N2 = 8;
-export type Placar = {
-  relogio: string; filaN1: number; filaN2: number; atendidos: number; noPrazo: number; abandonos: number; escalados: number; resolvidosN2: number;
-  esperaMedia: number; mesas: { nivel: 1 | 2; pa: number; nome: string; estado: EstadoMesa; feitos: number }[];
-};
+import { ABRE, CATEGORIAS, chegadas, FECHA, PACIENCIA_MIN, PESO_CATEGORIAS, TMA_N2, tmaEfetivo, type Cenario } from '../fila';
+import { MAX_N1, MAX_N2, SLA_PRIO, type ChamadoN2, type EstadoMesa, type Placar, type Posto, type Selecao } from './tipos';
+export * from './tipos';
 export type CoresCena = { fundo: string; chao: string; grade: string; mesa: string; mesa2: string; tela: string; ok: string; alerta: string; ruim: string; destaque: string; neutro: string; pele: string[] };
 
 const MAX_TICKETS = 400;
@@ -30,8 +22,13 @@ type Ticket = {
   id: number; estado: 'fila1' | 'n1' | 'fila2' | 'n2' | 'resolvido' | 'abandono';
   chegou: number; paciencia: number; mesa: number; fim: number; inicio: number;
   pos: THREE.Vector3; alvo: THREE.Vector3; anim: number; canal: number;
+  cat: number; prio: 1 | 2 | 3 | 4; escalou: number; prazo: number;
 };
-type Mesa = { nivel: 1 | 2; i: number; grupo: THREE.Group; pessoa: THREE.Mesh; tela: THREE.Mesh; anel: THREE.Mesh; ticket: Ticket | null; nome: string | null; pausa: boolean; ativo: boolean; pos: THREE.Vector3 };
+const sortear = (pesos: number[]) => { let x = rnd(); for (let i = 0; i < pesos.length; i++) { x -= pesos[i]; if (x < 0) return i; } return pesos.length - 1; };
+const codigo = (id: number) => `INC${String(4821000 + id).padStart(7, '0')}`;
+/** Chamados do N2 que já estavam abertos quando a simulação começa (escalados ontem e hoje cedo). */
+const BACKLOG: [number, 1 | 2 | 3 | 4, number][] = [[-430, 3, 1], [-380, 4, 4], [-300, 3, 4], [-250, 2, 0], [-120, 3, 2], [-60, 3, 5], [20, 2, 1], [50, 3, 3]];
+type Mesa = { nivel: 1 | 2; i: number; grupo: THREE.Group; pessoa: THREE.Mesh; tela: THREE.Mesh; anel: THREE.Mesh; ticket: Ticket | null; nome: string | null; pausa: boolean; pausaDesde: number; ativo: boolean; pos: THREE.Vector3 };
 
 /** Posição das mesas: N1 em duas fileiras no centro, N2 numa ilha à direita. */
 function posMesa(nivel: 1 | 2, i: number) {
@@ -66,7 +63,9 @@ export class Cena {
   private c: Cenario | null = null;
   private lam: number[] = [];
   private tma = 8;
-  private st = { atendidos: 0, noPrazo: 0, abandonos: 0, escalados: 0, resolvidosN2: 0, somaEspera: 0 };
+  private st = { atendidos: 0, noPrazo: 0, abandonos: 0, escalados: 0, resolvidosN2: 0, somaEspera: 0, n2NoPrazo: 0, n2Atrasados: 0 };
+  private tempo = new Map<string, { disponivel: number; pausa: number }>();
+  private semeado = false;
   rodando = true;
   velocidade = 5;
 
@@ -188,7 +187,7 @@ export class Cena {
         g.add(anel);
         g.userData = { nivel, mesa: i };
         s.add(g);
-        this.mesas.push({ nivel, i, grupo: g, pessoa, tela, anel, ticket: null, nome: null, pausa: false, ativo: false, pos: p.clone().setY(1.15).add(new THREE.Vector3(0, 0, 0.1 * voltada)) });
+        this.mesas.push({ nivel, i, grupo: g, pessoa, tela, anel, ticket: null, nome: null, pausa: false, pausaDesde: 0, ativo: false, pos: p.clone().setY(1.15).add(new THREE.Vector3(0, 0, 0.1 * voltada)) });
       }
     };
     add(1, MAX_N1);
@@ -220,15 +219,25 @@ export class Cena {
     this.c = c;
     this.lam = chegadas(c);
     this.tma = tmaEfetivo(c);
+    if (!this.semeado) { this.semeado = true; this.semear(); }
+  }
+
+  private semear() {
+    BACKLOG.forEach(([escalou, prio, cat], i) => {
+      const p = posFila(2, i);
+      this.tickets.push({ id: this.seq++, estado: 'fila2', chegou: escalou - 15, paciencia: 99, mesa: -1, fim: 0, inicio: 0, pos: p.clone(), alvo: p.clone(), anim: 0, canal: 0, cat, prio, escalou, prazo: escalou + SLA_PRIO[prio] * 60 });
+    });
   }
 
   /** Quem está logado em cada PA. PA vazia some da cena; em pausa, a pessoa fica na mesa mas não recebe contatos. */
   setEquipe(postos: Posto[]) {
     this.mesas.forEach((m) => {
       const p = postos.find((x) => x.nivel === m.nivel && x.pa === m.i);
+      const pausa = p?.estado === 'pausa';
+      if (pausa && (!m.pausa || m.nome !== p.nome)) m.pausaDesde = this.minuto; // começou a pausa agora
       m.nome = p?.nome ?? null;
       m.ativo = p?.estado === 'logado';
-      m.pausa = p?.estado === 'pausa';
+      m.pausa = pausa;
       m.grupo.visible = !!p;
       if (!m.ativo && m.ticket) { // a pessoa saiu ou pausou: o contato volta para a fila
         m.ticket.estado = m.nivel === 1 ? 'fila1' : 'fila2';
@@ -245,6 +254,13 @@ export class Cena {
     const total = (FECHA - ABRE) * 60;
     if (this.minuto >= total) this.novoDia();
     const t = this.minuto;
+    // tempo de cada analista: disponível para a fila ou em pausa
+    for (const m of this.mesas) {
+      if (!m.nome) continue;
+      const x = this.tempo.get(m.nome) ?? { disponivel: 0, pausa: 0 };
+      if (m.ativo) x.disponivel += dt; else if (m.pausa) x.pausa += dt;
+      this.tempo.set(m.nome, x);
+    }
     // chegadas (processo de Poisson com a taxa da hora)
     const h = Math.min(this.lam.length - 1, Math.floor(t / 60));
     // chegadas como processo de Poisson: em cada passo curto, chance de chegada = taxa × tempo
@@ -252,7 +268,7 @@ export class Cena {
       if (rnd() >= Math.min(1, x)) continue;
       const canal = rnd() < 0.5 ? 0 : rnd() < 0.6 ? 1 : 2;
       const p = new THREE.Vector3(-13.5, 1.1, [-2.2, 0, 2.2][canal]);
-      this.tickets.push({ id: this.seq++, estado: 'fila1', chegou: t, paciencia: expo(PACIENCIA_MIN), mesa: -1, fim: 0, inicio: 0, pos: p, alvo: p.clone(), anim: 0, canal });
+      this.tickets.push({ id: this.seq++, estado: 'fila1', chegou: t, paciencia: expo(PACIENCIA_MIN), mesa: -1, fim: 0, inicio: 0, pos: p, alvo: p.clone(), anim: 0, canal, cat: sortear(PESO_CATEGORIAS), prio: 3, escalou: 0, prazo: 0 });
     }
 
     // fim de atendimento
@@ -263,8 +279,15 @@ export class Cena {
       m.ticket = null;
       if (m.nivel === 1) {
         if (rnd() < this.c.fcr / 100) { k.estado = 'resolvido'; k.anim = 0; }
-        else { k.estado = 'fila2'; this.st.escalados++; }
-      } else { k.estado = 'resolvido'; k.anim = 0; this.st.resolvidosN2++; }
+        else {
+          k.estado = 'fila2'; this.st.escalados++;
+          k.prio = (sortear([0.03, 0.17, 0.65, 0.15]) + 1) as 1 | 2 | 3 | 4;
+          k.escalou = t; k.prazo = t + SLA_PRIO[k.prio] * 60;
+        }
+      } else {
+        k.estado = 'resolvido'; k.anim = 0; this.st.resolvidosN2++;
+        if (t <= k.prazo) this.st.n2NoPrazo++; else this.st.n2Atrasados++;
+      }
     }
     // desistência de quem espera demais no N1
     for (const k of this.tickets) {
@@ -282,7 +305,7 @@ export class Cena {
       if (espera <= 1) this.st.noPrazo++;
     }
     const livres2 = this.mesas.filter((m) => m.nivel === 2 && m.ativo && !m.ticket);
-    const fila2 = this.tickets.filter((k) => k.estado === 'fila2');
+    const fila2 = this.filaN2();
     for (const m of livres2) {
       const k = fila2.shift();
       if (!k) break;
@@ -290,19 +313,25 @@ export class Cena {
     }
   }
 
+  /** Fila do N2 na ordem de atendimento: o que vence primeiro sai primeiro. */
+  private filaN2() { return this.tickets.filter((k) => k.estado === 'fila2').sort((a, b) => a.prazo - b.prazo); }
+
   private novoDia() {
+    const dia = (FECHA - ABRE) * 60;
     this.minuto = 0;
-    this.st = { atendidos: 0, noPrazo: 0, abandonos: 0, escalados: 0, resolvidosN2: 0, somaEspera: 0 };
+    this.st = { atendidos: 0, noPrazo: 0, abandonos: 0, escalados: 0, resolvidosN2: 0, somaEspera: 0, n2NoPrazo: 0, n2Atrasados: 0 };
     this.feitos.clear();
+    this.tempo.clear();
+    this.mesas.forEach((m) => { m.pausaDesde -= dia; });
     // a fila do N1 não passa a noite; a do N2 sim (chamados abertos)
     this.tickets = this.tickets.filter((k) => k.estado === 'fila2' || k.estado === 'n2');
-    this.tickets.forEach((k) => { if (k.estado === 'n2') k.fim -= (FECHA - ABRE) * 60; k.chegou -= (FECHA - ABRE) * 60; });
+    this.tickets.forEach((k) => { if (k.estado === 'n2') k.fim -= (FECHA - ABRE) * 60; k.chegou -= dia; k.escalou -= dia; k.prazo -= dia; });
   }
 
   private desenhar(dtReal: number) {
     const c = this.cores;
     const fila1 = this.tickets.filter((k) => k.estado === 'fila1');
-    const fila2 = this.tickets.filter((k) => k.estado === 'fila2');
+    const fila2 = this.filaN2();
     fila1.forEach((k, i) => k.alvo.copy(posFila(1, i)));
     fila2.forEach((k, i) => k.alvo.copy(posFila(2, i)));
     let n = 0;
@@ -404,14 +433,25 @@ export class Cena {
   placar(): Placar {
     const h = Math.floor(this.hora()), m = Math.floor(this.minuto % 60);
     return {
-      relogio: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+      relogio: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, minuto: this.minuto,
+      n2NoPrazo: this.st.n2NoPrazo, n2Atrasados: this.st.n2Atrasados,
+      tempo: Object.fromEntries(this.tempo),
       filaN1: this.tickets.filter((k) => k.estado === 'fila1').length,
       filaN2: this.tickets.filter((k) => k.estado === 'fila2').length,
       atendidos: this.st.atendidos, noPrazo: this.st.noPrazo, abandonos: this.st.abandonos, escalados: this.st.escalados, resolvidosN2: this.st.resolvidosN2,
       esperaMedia: this.st.atendidos ? this.st.somaEspera / this.st.atendidos : 0,
-      mesas: this.mesas.filter((x) => x.nome).map((x) => ({ nivel: x.nivel, pa: x.i, nome: x.nome!, estado: this.estadoMesa(x), feitos: this.feitos.get(x.nome!) ?? 0 })),
+      mesas: this.mesas.filter((x) => x.nome).map((x) => ({ nivel: x.nivel, pa: x.i, nome: x.nome!, estado: this.estadoMesa(x), feitos: this.feitos.get(x.nome!) ?? 0, pausaAgora: x.pausa ? this.minuto - x.pausaDesde : null })),
     };
   }
+  /** Chamados abertos no N2 (na fila ou em atendimento), do que vence primeiro ao último. */
+  chamadosN2(): ChamadoN2[] {
+    const t = this.minuto;
+    return this.tickets.filter((k) => k.estado === 'fila2' || k.estado === 'n2').sort((a, b) => a.prazo - b.prazo).map((k) => {
+      const m = k.estado === 'n2' ? this.mesas.find((x) => x.nivel === 2 && x.ticket === k) : undefined;
+      return { cod: codigo(k.id), prio: k.prio, assunto: CATEGORIAS[k.cat], com: m?.nome ? { nome: m.nome, pa: m.i } : null, aberto: t - k.escalou, resta: k.prazo - t };
+    });
+  }
+
   /** Posição na tela dos rótulos das áreas. */
   rotulos() {
     const r = this.renderer.domElement.getBoundingClientRect();
@@ -428,7 +468,7 @@ export class Cena {
       const cab = new THREE.Vector3();
       m.pessoa.getWorldPosition(cab);
       const v = cab.setY(2.5).project(this.camera);
-      return { nivel: m.nivel, pa: m.i, nome: m.nome!, estado: this.estadoMesa(m), alto: Math.floor(m.i / 2) % 2 === 1, // mesas vizinhas alternam a altura do crachá
+      return { nivel: m.nivel, pa: m.i, nome: m.nome!, estado: this.estadoMesa(m), pausaAgora: m.pausa ? this.minuto - m.pausaDesde : null, alto: Math.floor(m.i / 2) % 2 === 1, // mesas vizinhas alternam a altura do crachá
          x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height, visivel: v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 };
     });
   }

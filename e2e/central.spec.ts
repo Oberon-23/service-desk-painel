@@ -85,8 +85,8 @@ test('PA: logar, pausar e deslogar mexe na equipe, nos crachás 3D e na fila', a
   await expect(page.locator('.sd-cracha', { hasText: 'Marta' })).toContainText('PA 10');
 
   // pausa: continua na PA, mas sai da conta
-  await page.getByRole('button', { name: 'Pausar Ana (PA 01)' }).click();
-  await expect(page.getByRole('listitem', { name: 'PA 01: Ana, em pausa' })).toBeVisible();
+  await page.getByLabel('Pausar Ana (PA 01)').selectOption('lanche');
+  await expect(page.getByRole('listitem', { name: 'PA 01: Ana, em pausa (lanche)' })).toBeVisible();
   await expect(n1).toHaveValue('7');
   await expect(page.locator('.sd-cracha.pausa', { hasText: 'Ana' })).toBeVisible();
 
@@ -113,10 +113,43 @@ test('PA: pausar pelo cartão da mesa na cena 3D', async ({ page }) => {
   await page.locator('.fab-cena').scrollIntoViewIfNeeded();
   await page.getByRole('button', { name: /^Davi, N1/ }).click();
   const sel = page.getByRole('dialog', { name: 'Davi, N1' });
-  await sel.getByRole('button', { name: 'Pausa' }).click();
+  await sel.getByLabel('Motivo da pausa').selectOption('feedback');
   await expect(sel).toContainText('Em pausa');
-  await expect(page.getByRole('listitem', { name: 'PA 04: Davi, em pausa' })).toBeVisible();
+  await expect(page.getByRole('listitem', { name: 'PA 04: Davi, em pausa (feedback)' })).toBeVisible();
   await sel.getByRole('button', { name: 'Deslogar' }).click();
   await expect(sel).toHaveCount(0);
   await expect(page.getByRole('listitem', { name: 'PA 04: livre' })).toBeVisible();
+});
+
+test('pausa acima do limite do motivo vira alerta, e a aderência mostra quem falta', async ({ page }) => {
+  await page.goto('/');
+  const resumo = page.getByRole('list', { name: 'Aderência à escala' });
+  await expect(resumo).toContainText('100%');
+  await page.getByLabel('Pausar Carla (PA 03)').selectOption('banheiro'); // limite de 5 min
+  await page.getByRole('button', { name: 'Deslogar Gabi da PA 07' }).click();
+  await expect(resumo).toContainText('9 de 11 escalados atendendo');
+  await expect(resumo).toContainText('Gabi');
+  await page.locator('.fab-cena').scrollIntoViewIfNeeded();
+  await page.getByRole('button', { name: '20×' }).click();
+  await expect(page.locator('.pa-alerta')).toContainText('Carla está há', { timeout: 15_000 });
+  await expect(page.locator('.pa-alerta')).toContainText('limite 5 min');
+  await expect(page.locator('.pa.estourada')).toHaveCount(1);
+  await expect(page.locator('.sd-cracha.estourada', { hasText: 'Carla' })).toBeVisible();
+});
+
+test('chamados do N2 em ordem de prazo, com os vencidos no topo', async ({ page }) => {
+  await page.goto('/');
+  const lista = page.getByRole('region', { name: 'Lista de chamados do N2' });
+  await expect(lista.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('list', { name: 'Situação do N2' })).toContainText('Abertos');
+  const prazos = await lista.locator('tbody tr td:last-child').allTextContents();
+  const min = (t: string) => {
+    const m = t.match(/(\d+)h(\d+)|(\d+) min/);
+    const v = m ? (m[1] ? +m[1] * 60 + +m[2] : +m[3]) : 0;
+    return t.startsWith('Vencido') ? -v : v;
+  };
+  const v = prazos.map(min);
+  expect(v.length).toBeGreaterThan(2);
+  // pode haver 1 min de diferença entre a leitura de linhas vizinhas
+  for (let i = 1; i < v.length; i++) expect(v[i]).toBeGreaterThanOrEqual(v[i - 1] - 1);
 });

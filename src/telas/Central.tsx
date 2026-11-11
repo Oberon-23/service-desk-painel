@@ -1,10 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Coffee, Headset, LogOut, Maximize2, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Headset, LogOut, Maximize2, Minus, Pause, Play, Plus, RotateCcw } from 'lucide-react';
 import { ATUAL, META_NS, melhorAlavanca, NOMES_N1, NOMES_N2, simular, type Cenario } from '../fila';
 import { Card, Kpis, Legenda, Manchete, Segmentado } from '../kit/ui';
 import type { Status } from '../kit/formato';
 import { Grafico, useCores } from '../kit/graficos';
-import type { Cena, CoresCena, Placar, Posto, Selecao } from '../central/cena';
+import type { Cena, CoresCena } from '../central/cena';
+import { MOTIVOS, SLA_PRIO, type ChamadoN2, type Motivo, type Placar, type Posto, type Selecao } from '../central/tipos';
 
 const MAX_PA = { 1: 14, 2: 8 } as const;
 /** Número da PA na sala: N1 usa 01–14 e N2 usa 15–22. */
@@ -57,11 +58,12 @@ export default function Central() {
   const chave = (ps: Posto[]) => ps.map((p) => `${p.nivel}.${p.pa}.${p.nome}.${p.estado}`).sort().join('|');
   const alterado = JSON.stringify(c) !== JSON.stringify(ATUAL) || chave(postos) !== chave(POSTOS_HOJE);
   const [foco, setFoco] = useState<{ nivel: 1 | 2; pa: number; n: number } | null>(null);
-  const mudar = (nivel: 1 | 2, pa: number, estado: Posto['estado'] | 'fora', nome?: string) => setPostos((ps) => {
+  const [vivo, setVivo] = useState<{ placar: Placar; chamados: ChamadoN2[] } | null>(null);
+  const mudar: Mudar = (nivel, pa, estado, nome, motivo) => setPostos((ps) => {
     const resto = ps.filter((p) => !(p.nivel === nivel && p.pa === pa) && p.nome !== nome);
     if (estado === 'fora') return resto;
     const atual = ps.find((p) => p.nivel === nivel && p.pa === pa);
-    return [...resto, { nivel, pa, nome: nome ?? atual!.nome, estado }];
+    return [...resto, { nivel, pa, nome: nome ?? atual!.nome, estado, ...(estado === 'pausa' ? { motivo: motivo ?? 'descanso' } : {}) }];
   });
   const hoje = useMemo(() => simular(ATUAL), []);
   const dica = useMemo(() => melhorAlavanca(c), [c]);
@@ -96,7 +98,7 @@ export default function Central() {
       <div className="fab-grid">
         <Card className="fab-card" titulo={<span className="tit-ic"><Headset size={18} aria-hidden="true" />Central ao vivo</span>}
           sub="Cada cubo é um contato. Azul: na fila do N1 ou em atendimento; laranja: escalado para o N2; verde: resolvido; vermelho: desistiu de esperar. Cada PA ocupada mostra quem está logado nela. Arraste para girar, use a roda do mouse ou a pinça para aproximar e clique numa mesa para ver o analista.">
-          <Central3D cenario={c} postos={postos} foco={foco} onMudar={mudar} />
+          <Central3D cenario={c} postos={postos} foco={foco} onMudar={mudar} onTique={setVivo} />
         </Card>
         <Card className="fab-controles" titulo="E se…?" sub="Mude a equipe ou a demanda e compare com hoje. A animação e os números usam o mesmo modelo de fila."
           acoes={alterado ? <button type="button" className="limpar" onClick={voltar}><RotateCcw size={14} aria-hidden="true" />Voltar para hoje</button> : undefined}>
@@ -112,7 +114,8 @@ export default function Central() {
         </Card>
       </div>
 
-      <PosicoesPA postos={postos} onMudar={mudar} onVer={(nivel, pa) => setFoco((f) => ({ nivel, pa, n: (f?.n ?? 0) + 1 }))} />
+      <PosicoesPA postos={postos} placar={vivo?.placar ?? null} onMudar={mudar} onVer={(nivel, pa) => setFoco((f) => ({ nivel, pa, n: (f?.n ?? 0) + 1 }))} />
+      <ChamadosN2Card chamados={vivo?.chamados ?? null} placar={vivo?.placar ?? null} />
 
       <Card titulo="Hora a hora" sub="Nível de serviço esperado em cada hora do dia. As horas abaixo da meta mostram onde reforçar a escala (veja a aba Dimensionamento).">
         <Legenda itens={[{ label: 'Na meta (≥ 80%)', cor: cores.good }, { label: 'Abaixo da meta', cor: cores.bad }, { label: 'Meta', tipo: 'tracejado' }]} />
@@ -152,15 +155,50 @@ function Chave({ rotulo, valor, ajuda, onChange }: { rotulo: string; valor: bool
   );
 }
 
-type Mudar = (nivel: 1 | 2, pa: number, estado: Posto['estado'] | 'fora', nome?: string) => void;
-const ESTADO_TXT = { logado: 'Logado', pausa: 'Em pausa' } as const;
+type Mudar = (nivel: 1 | 2, pa: number, estado: Posto['estado'] | 'fora', nome?: string, motivo?: Motivo) => void;
+type Vivo = { placar: Placar; chamados: ChamadoN2[] };
+const dur = (min: number) => { const m = Math.max(0, Math.round(min)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`; };
+/** Pausa que passou do limite do motivo, em minutos (0 se ainda está dentro). */
+const estouro = (p: Posto | undefined, pausaAgora: number | null | undefined) => (p?.estado === 'pausa' && p.motivo && pausaAgora != null ? Math.max(0, pausaAgora - MOTIVOS[p.motivo].limite) : 0);
+const ESCALADOS = new Set(POSTOS_HOJE.map((p) => p.nome));
 
-/** Controle das posições de atendimento: quem está logado em cada PA. */
-function PosicoesPA({ postos, onMudar, onVer }: { postos: Posto[]; onMudar: Mudar; onVer: (nivel: 1 | 2, pa: number) => void }) {
-  const n = (nivel: 1 | 2, e: Posto['estado']) => postos.filter((p) => p.nivel === nivel && p.estado === e).length;
+function SeletorPausa({ rotulo, onPausar, className }: { rotulo: string; onPausar: (m: Motivo) => void; className?: string }) {
+  return (
+    <select className={className ?? 'pa-pausa'} aria-label={rotulo} value="" onChange={(e) => e.target.value && onPausar(e.target.value as Motivo)}>
+      <option value="">Pausa…</option>
+      {(Object.keys(MOTIVOS) as Motivo[]).map((m) => <option key={m} value={m}>{MOTIVOS[m].rotulo} (até {MOTIVOS[m].limite} min)</option>)}
+    </select>
+  );
+}
+
+/** Controle das posições de atendimento: quem está logado em cada PA, pausas e aderência à escala. */
+function PosicoesPA({ postos, placar, onMudar, onVer }: { postos: Posto[]; placar: Placar | null; onMudar: Mudar; onVer: (nivel: 1 | 2, pa: number) => void }) {
+  const pausaDe = (p: Posto) => placar?.mesas.find((m) => m.nivel === p.nivel && m.pa === p.pa)?.pausaAgora ?? null;
+  const escaladosLogados = postos.filter((p) => ESCALADOS.has(p.nome) && p.estado === 'logado').length;
+  const aderencia = escaladosLogados / ESCALADOS.size;
+  const emPausa = postos.filter((p) => p.estado === 'pausa');
+  const estouradas = emPausa.filter((p) => estouro(p, pausaDe(p)) > 0);
+  const ausentes = [...ESCALADOS].filter((n) => !postos.some((p) => p.nome === n));
+  const extras = postos.filter((p) => !ESCALADOS.has(p.nome)).map((p) => p.nome);
+  const tempos = placar ? Object.values(placar.tempo) : [];
+  const somaPausa = tempos.reduce((s, x) => s + x.pausa, 0), somaDisp = tempos.reduce((s, x) => s + x.disponivel, 0);
+  const shrink = somaPausa + somaDisp > 0 ? somaPausa / (somaPausa + somaDisp) : null;
+
   return (
     <Card titulo="Posições de atendimento (PA)"
-      sub={`Logue, pause ou tire cada analista da sua PA. Quem está logado aparece com o nome na mesa da central 3D e entra na conta da fila; em pausa, a pessoa fica na PA mas não recebe contatos. Agora: ${n(1, 'logado')} logados no N1 e ${n(2, 'logado')} no N2${n(1, 'pausa') + n(2, 'pausa') ? `, ${n(1, 'pausa') + n(2, 'pausa')} em pausa` : ''}.`}>
+      sub="Logue, pause ou tire cada analista da sua PA. Quem está logado aparece com o nome na mesa da central 3D e entra na conta da fila; em pausa, a pessoa fica na PA mas não recebe contatos. Os tempos de pausa correm no relógio da simulação.">
+      <ul className="sd-placar pa-resumo" aria-label="Aderência à escala">
+        <li><span>Aderência à escala</span><b className={aderencia < 0.85 ? 'var-ruim' : ''}>{pct(aderencia, 0)}</b><small>{escaladosLogados} de {ESCALADOS.size} escalados atendendo</small></li>
+        <li><span>Em pausa agora</span><b className={estouradas.length ? 'var-ruim' : ''}>{emPausa.length}</b><small>{estouradas.length ? `${estouradas.length} acima do limite` : 'nenhuma acima do limite'}</small></li>
+        <li><span>Tempo em pausa no dia</span><b>{shrink === null ? '—' : pct(shrink, 1)}</b><small>do tempo logado da equipe</small></li>
+        <li><span>Faltando da escala</span><b className={ausentes.length ? 'var-ruim' : ''}>{ausentes.length}</b><small>{ausentes.length ? ausentes.join(', ') : 'todos presentes'}</small></li>
+        <li><span>Fora da escala</span><b>{extras.length}</b><small>{extras.length ? extras.join(', ') : 'ninguém extra'}</small></li>
+      </ul>
+      {estouradas.length > 0 && (
+        <p className="pa-alerta" role="status"><AlertTriangle size={15} aria-hidden="true" />
+          {estouradas.map((p) => `${p.nome} está há ${dur(pausaDe(p)!)} em ${MOTIVOS[p.motivo!].rotulo.toLowerCase()} (limite ${MOTIVOS[p.motivo!].limite} min)`).join('; ')}.
+        </p>
+      )}
       {([1, 2] as const).map((nivel) => {
         const nomes = nivel === 1 ? NOMES_N1 : NOMES_N2;
         const fora = nomes.filter((nome) => !postos.some((p) => p.nome === nome));
@@ -171,16 +209,25 @@ function PosicoesPA({ postos, onMudar, onVer }: { postos: Posto[]; onMudar: Muda
               {Array.from({ length: MAX_PA[nivel] }, (_, pa) => {
                 const p = postos.find((x) => x.nivel === nivel && x.pa === pa);
                 const rot = `PA ${numPa(nivel, pa)}`;
+                const pausa = p ? pausaDe(p) : null;
+                const acima = estouro(p, pausa);
+                const t = p && placar?.tempo[p.nome];
+                const estadoTxt = !p ? 'livre' : p.estado === 'logado' ? 'logado' : `em pausa (${MOTIVOS[p.motivo ?? 'descanso'].rotulo.toLowerCase()})`;
                 return (
-                  <li key={pa} className={`pa ${p ? p.estado : 'livre'}`} aria-label={p ? `${rot}: ${p.nome}, ${ESTADO_TXT[p.estado].toLowerCase()}` : `${rot}: livre`}>
+                  <li key={pa} className={`pa ${p ? p.estado : 'livre'}${acima ? ' estourada' : ''}`} aria-label={p ? `${rot}: ${p.nome}, ${estadoTxt}` : `${rot}: livre`}>
                     <span className="pa-num">{rot}</span>
                     {p ? (
                       <>
                         <button type="button" className="pa-nome" onClick={() => onVer(nivel, pa)} title="Ver na central 3D">{p.nome}</button>
-                        <span className={`pill ${p.estado === 'logado' ? 'ok' : 'warn'}`}>{ESTADO_TXT[p.estado]}</span>
+                        <span className={`pill ${p.estado === 'logado' ? 'ok' : acima ? 'bad' : 'warn'}`}>{p.estado === 'logado' ? 'Logado' : MOTIVOS[p.motivo ?? 'descanso'].rotulo}</span>
+                        <span className="pa-info">
+                          {p.estado === 'pausa'
+                            ? (pausa == null ? 'Em pausa' : acima ? `${dur(pausa)} · ${dur(acima)} acima do limite` : `${dur(pausa)} de ${MOTIVOS[p.motivo ?? 'descanso'].limite} min`)
+                            : t ? `Pausa no dia: ${dur(t.pausa)}` : ' '}
+                        </span>
                         <span className="pa-acoes">
                           {p.estado === 'logado'
-                            ? <button type="button" className="btn-ic" onClick={() => onMudar(nivel, pa, 'pausa')} aria-label={`Pausar ${p.nome} (${rot})`} title="Pausa"><Coffee size={15} /></button>
+                            ? <SeletorPausa rotulo={`Pausar ${p.nome} (${rot})`} onPausar={(m) => onMudar(nivel, pa, 'pausa', undefined, m)} />
                             : <button type="button" className="btn-ic" onClick={() => onMudar(nivel, pa, 'logado')} aria-label={`Voltar ${p.nome} da pausa (${rot})`} title="Voltar da pausa"><Play size={15} /></button>}
                           <button type="button" className="btn-ic" onClick={() => onMudar(nivel, pa, 'fora')} aria-label={`Deslogar ${p.nome} da ${rot}`} title="Deslogar"><LogOut size={15} /></button>
                         </span>
@@ -205,9 +252,60 @@ function PosicoesPA({ postos, onMudar, onVer }: { postos: Posto[]; onMudar: Muda
   );
 }
 
+/** Chamados abertos no N2, do que vence primeiro ao último. */
+function ChamadosN2Card({ chamados, placar }: { chamados: ChamadoN2[] | null; placar: Placar | null }) {
+  const [todos, setTodos] = useState(false);
+  if (!chamados || !placar) {
+    return <Card titulo="Chamados do N2 por prazo" sub="Aparece quando a central 3D estiver rodando."><p className="card-sub">Carregando os chamados…</p></Card>;
+  }
+  const vencidos = chamados.filter((k) => k.resta < 0);
+  const vencem1h = chamados.filter((k) => k.resta >= 0 && k.resta <= 60);
+  const p1 = chamados.filter((k) => k.prio === 1);
+  const resolvidos = placar.n2NoPrazo + placar.n2Atrasados;
+  const lista = todos ? chamados : chamados.slice(0, 8);
+  const situacao = (k: ChamadoN2) => (k.resta < 0 ? 'vencido' : k.resta <= 60 ? 'risco' : 'ok');
+  return (
+    <Card titulo="Chamados do N2 por prazo"
+      sub={`O N2 atende primeiro o que vence primeiro. Prazo de solução por prioridade, em horas úteis: P1 ${SLA_PRIO[1]} h, P2 ${SLA_PRIO[2]} h, P3 ${SLA_PRIO[3]} h e P4 ${SLA_PRIO[4]} h.`}>
+      {p1.length > 0 && (
+        <p className="n2-p1" role="alert"><AlertTriangle size={16} aria-hidden="true" />
+          <b>Incidente P1 aberto:</b> {p1.map((k) => `${k.cod} (${k.assunto}), ${k.com ? `com ${k.com.nome}` : 'na fila'}, vence em ${dur(k.resta)}`).join('; ')}.
+        </p>
+      )}
+      <ul className="sd-placar" aria-label="Situação do N2">
+        <li><span>Abertos</span><b>{chamados.length}</b></li>
+        <li><span>Vencidos</span><b className={vencidos.length ? 'var-ruim' : ''}>{vencidos.length}</b></li>
+        <li><span>Vencem em até 1 h</span><b className={vencem1h.length ? 'var-alerta' : ''}>{vencem1h.length}</b></li>
+        <li><span>Em atendimento</span><b>{chamados.filter((k) => k.com).length}</b></li>
+        <li><span>Resolvidos no prazo hoje</span><b>{resolvidos ? pct(placar.n2NoPrazo / resolvidos, 0) : '—'}</b></li>
+      </ul>
+      {chamados.length === 0 ? <p className="card-sub" style={{ marginTop: 10 }}>Nenhum chamado aberto no N2 agora.</p> : (
+        <div className="n2-tabela" role="region" aria-label="Lista de chamados do N2" tabIndex={0}>
+          <table>
+            <thead><tr><th>Chamado</th><th>Prioridade</th><th>Assunto</th><th>Com quem</th><th>Escalado há</th><th>Prazo</th></tr></thead>
+            <tbody>
+              {lista.map((k) => (
+                <tr key={k.cod} className={situacao(k)}>
+                  <td>{k.cod}</td>
+                  <td><span className={`prio p${k.prio}`}>P{k.prio}</span></td>
+                  <td>{k.assunto}</td>
+                  <td>{k.com ? `${k.com.nome} · PA ${numPa(2, k.com.pa)}` : <span className="muted">Na fila</span>}</td>
+                  <td>{dur(k.aberto)}</td>
+                  <td><span className={`pill ${situacao(k) === 'vencido' ? 'bad' : situacao(k) === 'risco' ? 'warn' : 'ok'}`}>{k.resta < 0 ? `Vencido há ${dur(-k.resta)}` : `Vence em ${dur(k.resta)}`}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {chamados.length > 8 && <button type="button" className="btn-sec" style={{ marginTop: 10 }} onClick={() => setTodos(!todos)}>{todos ? 'Mostrar só os 8 mais urgentes' : `Ver todos os ${chamados.length}`}</button>}
+    </Card>
+  );
+}
+
 const ROTULOS = ['Entrada', 'Fila N1', 'N1 · primeiro atendimento', 'Fila N2', 'N2 · especialistas'];
 
-function Central3D({ cenario, postos, foco, onMudar }: { cenario: Cenario; postos: Posto[]; foco: { nivel: 1 | 2; pa: number; n: number } | null; onMudar: Mudar }) {
+function Central3D({ cenario, postos, foco, onMudar, onTique }: { cenario: Cenario; postos: Posto[]; foco: { nivel: 1 | 2; pa: number; n: number } | null; onMudar: Mudar; onTique: (v: Vivo) => void }) {
   const caixa = useRef<HTMLDivElement>(null);
   const cena = useRef<Cena | null>(null);
   const cores = useCores();
@@ -250,10 +348,10 @@ function Central3D({ cenario, postos, foco, onMudar }: { cenario: Cenario; posto
   useEffect(() => {
     if (estado !== 'pronto') return;
     let id = 0;
-    const tique = () => { if (cena.current) { setPlacar(cena.current.placar()); setRot(cena.current.rotulos()); setCrachas(cena.current.crachas()); } id = window.setTimeout(tique, 250); };
+    const tique = () => { if (cena.current) { const pl = cena.current.placar(); setPlacar(pl); setRot(cena.current.rotulos()); setCrachas(cena.current.crachas()); onTique({ placar: pl, chamados: cena.current.chamadosN2() }); } id = window.setTimeout(tique, 250); };
     tique();
     return () => clearTimeout(id);
-  }, [estado]);
+  }, [estado]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (estado === 'sem3d') return <p className="fab-sem3d">Este navegador não conseguiu desenhar a cena 3D. Os números e os controles de “E se…?” continuam funcionando.</p>;
   const mesaSel = sel && placar ? placar.mesas.find((m) => m.nivel === sel.nivel && m.pa === sel.pa) : null;
@@ -268,7 +366,7 @@ function Central3D({ cenario, postos, foco, onMudar }: { cenario: Cenario; posto
           <div key={i} className="fab-rot" style={{ left: p.x, top: p.y, transform: 'translate(-50%, 0)' }} aria-hidden="true"><b>{ROTULOS[i]}</b>{i === 1 && placar ? ` ${placar.filaN1}` : i === 3 && placar ? ` ${placar.filaN2}` : ''}</div>
         ))}
         {estado === 'pronto' && crachas.map((k) => k.visivel && (
-          <div key={`${k.nivel}-${k.pa}`} className={`sd-cracha ${k.estado}${k.alto ? ' alto' : ''}`} style={{ left: k.x, top: k.y }} aria-hidden="true">
+          <div key={`${k.nivel}-${k.pa}`} className={`sd-cracha ${k.estado}${k.alto ? ' alto' : ''}${estouro(postos.find((p) => p.nivel === k.nivel && p.pa === k.pa), k.pausaAgora) ? ' estourada' : ''}`} style={{ left: k.x, top: k.y }} aria-hidden="true">
             {k.nome}<small>PA {numPa(k.nivel, k.pa)}</small>
           </div>
         ))}
@@ -283,7 +381,7 @@ function Central3D({ cenario, postos, foco, onMudar }: { cenario: Cenario; posto
             <div className="fab-sel-acoes">
               {mesaSel.estado === 'pausa'
                 ? <button type="button" className="btn-sec" onClick={() => onMudar(sel.nivel, sel.pa, 'logado')}><Play size={14} aria-hidden="true" />Voltar da pausa</button>
-                : <button type="button" className="btn-sec" onClick={() => onMudar(sel.nivel, sel.pa, 'pausa')}><Coffee size={14} aria-hidden="true" />Pausa</button>}
+                : <SeletorPausa className="btn-sec" rotulo="Motivo da pausa" onPausar={(m) => onMudar(sel.nivel, sel.pa, 'pausa', undefined, m)} />}
               <button type="button" className="btn-sec" onClick={() => onMudar(sel.nivel, sel.pa, 'fora')}><LogOut size={14} aria-hidden="true" />Deslogar</button>
             </div>
           </div>
