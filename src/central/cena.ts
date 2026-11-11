@@ -9,17 +9,20 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { ABRE, chegadas, FECHA, NOMES_N1, NOMES_N2, PACIENCIA_MIN, TMA_N2, tmaEfetivo, type Cenario } from '../fila';
+import { ABRE, chegadas, FECHA, PACIENCIA_MIN, TMA_N2, tmaEfetivo, type Cenario } from '../fila';
 
-export type EstadoMesa = 'livre' | 'atendendo' | 'fora';
-export type Selecao = { nivel: 1 | 2; mesa: number; nome: string };
+export type EstadoMesa = 'livre' | 'atendendo' | 'pausa' | 'fora';
+export type Selecao = { nivel: 1 | 2; pa: number; nome: string };
+/** Quem está logado em cada posição de atendimento (PA). */
+export type Posto = { nivel: 1 | 2; pa: number; nome: string; estado: 'logado' | 'pausa' };
+export const MAX_N1 = 14, MAX_N2 = 8;
 export type Placar = {
   relogio: string; filaN1: number; filaN2: number; atendidos: number; noPrazo: number; abandonos: number; escalados: number; resolvidosN2: number;
-  esperaMedia: number; mesas: { nivel: 1 | 2; nome: string; estado: EstadoMesa; feitos: number; ativo: boolean }[];
+  esperaMedia: number; mesas: { nivel: 1 | 2; pa: number; nome: string; estado: EstadoMesa; feitos: number }[];
 };
 export type CoresCena = { fundo: string; chao: string; grade: string; mesa: string; mesa2: string; tela: string; ok: string; alerta: string; ruim: string; destaque: string; neutro: string; pele: string[] };
 
-const MAX_N1 = 14, MAX_N2 = 8, MAX_TICKETS = 400;
+const MAX_TICKETS = 400;
 const rnd = (() => { let s = 11; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
 const expo = (media: number) => -Math.log(1 - rnd() * 0.9999) * media;
 
@@ -28,7 +31,7 @@ type Ticket = {
   chegou: number; paciencia: number; mesa: number; fim: number; inicio: number;
   pos: THREE.Vector3; alvo: THREE.Vector3; anim: number; canal: number;
 };
-type Mesa = { nivel: 1 | 2; i: number; grupo: THREE.Group; pessoa: THREE.Mesh; tela: THREE.Mesh; anel: THREE.Mesh; ticket: Ticket | null; feitos: number; ativo: boolean; pos: THREE.Vector3 };
+type Mesa = { nivel: 1 | 2; i: number; grupo: THREE.Group; pessoa: THREE.Mesh; tela: THREE.Mesh; anel: THREE.Mesh; ticket: Ticket | null; nome: string | null; pausa: boolean; ativo: boolean; pos: THREE.Vector3 };
 
 /** Posição das mesas: N1 em duas fileiras no centro, N2 numa ilha à direita. */
 function posMesa(nivel: 1 | 2, i: number) {
@@ -185,7 +188,7 @@ export class Cena {
         g.add(anel);
         g.userData = { nivel, mesa: i };
         s.add(g);
-        this.mesas.push({ nivel, i, grupo: g, pessoa, tela, anel, ticket: null, feitos: 0, ativo: true, pos: p.clone().setY(1.15).add(new THREE.Vector3(0, 0, 0.1 * voltada)) });
+        this.mesas.push({ nivel, i, grupo: g, pessoa, tela, anel, ticket: null, nome: null, pausa: false, ativo: false, pos: p.clone().setY(1.15).add(new THREE.Vector3(0, 0, 0.1 * voltada)) });
       }
     };
     add(1, MAX_N1);
@@ -217,15 +220,23 @@ export class Cena {
     this.c = c;
     this.lam = chegadas(c);
     this.tma = tmaEfetivo(c);
+  }
+
+  /** Quem está logado em cada PA. PA vazia some da cena; em pausa, a pessoa fica na mesa mas não recebe contatos. */
+  setEquipe(postos: Posto[]) {
     this.mesas.forEach((m) => {
-      m.ativo = m.i < (m.nivel === 1 ? c.n1 : c.n2);
-      m.grupo.visible = m.ativo; // só aparecem as mesas com alguém trabalhando
-      if (!m.ativo && m.ticket) { // a pessoa saiu: o contato volta para a fila
+      const p = postos.find((x) => x.nivel === m.nivel && x.pa === m.i);
+      m.nome = p?.nome ?? null;
+      m.ativo = p?.estado === 'logado';
+      m.pausa = p?.estado === 'pausa';
+      m.grupo.visible = !!p;
+      if (!m.ativo && m.ticket) { // a pessoa saiu ou pausou: o contato volta para a fila
         m.ticket.estado = m.nivel === 1 ? 'fila1' : 'fila2';
         m.ticket = null;
       }
     });
   }
+  private feitos = new Map<string, number>();
 
   private hora() { return ABRE + this.minuto / 60; }
   private passo(dt: number) {
@@ -248,7 +259,7 @@ export class Cena {
     for (const m of this.mesas) {
       const k = m.ticket;
       if (!k || t < k.fim) continue;
-      m.feitos++;
+      if (m.nome) this.feitos.set(m.nome, (this.feitos.get(m.nome) ?? 0) + 1);
       m.ticket = null;
       if (m.nivel === 1) {
         if (rnd() < this.c.fcr / 100) { k.estado = 'resolvido'; k.anim = 0; }
@@ -282,7 +293,7 @@ export class Cena {
   private novoDia() {
     this.minuto = 0;
     this.st = { atendidos: 0, noPrazo: 0, abandonos: 0, escalados: 0, resolvidosN2: 0, somaEspera: 0 };
-    this.mesas.forEach((m) => { m.feitos = 0; });
+    this.feitos.clear();
     // a fila do N1 não passa a noite; a do N2 sim (chamados abertos)
     this.tickets = this.tickets.filter((k) => k.estado === 'fila2' || k.estado === 'n2');
     this.tickets.forEach((k) => { if (k.estado === 'n2') k.fim -= (FECHA - ABRE) * 60; k.chegou -= (FECHA - ABRE) * 60; });
@@ -327,11 +338,11 @@ export class Cena {
 
     const pulso = 0.6 + 0.4 * Math.sin(performance.now() / 200);
     for (const m of this.mesas) {
-      const estado: EstadoMesa = !m.ativo ? 'fora' : m.ticket ? 'atendendo' : 'livre';
+      const estado = this.estadoMesa(m);
       const pm = m.pessoa.material as THREE.MeshStandardMaterial;
-      pm.color.set(estado === 'atendendo' ? (m.nivel === 1 ? c.destaque : c.alerta) : c.ok);
+      pm.color.set(estado === 'atendendo' ? (m.nivel === 1 ? c.destaque : c.alerta) : estado === 'pausa' ? c.neutro : c.ok);
       const tm = m.tela.material as THREE.MeshStandardMaterial;
-      tm.color.set(estado === 'fora' ? c.mesa2 : c.tela);
+      tm.color.set(estado === 'fora' || estado === 'pausa' ? c.mesa2 : c.tela);
       tm.emissive.set(estado === 'atendendo' ? c.tela : '#000000');
       const am = m.anel.material as THREE.MeshStandardMaterial;
       m.anel.visible = estado === 'atendendo';
@@ -368,15 +379,17 @@ export class Cena {
     const r = this.renderer.domElement.getBoundingClientRect();
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
-    const hit = ray.intersectObjects(this.mesas.filter((m) => m.ativo).map((m) => m.grupo), true)[0];
+    const hit = ray.intersectObjects(this.mesas.filter((m) => m.nome).map((m) => m.grupo), true)[0];
     let o: THREE.Object3D | null = hit?.object ?? null;
     while (o && o.userData.nivel === undefined) o = o.parent;
     if (!o) { this.aoSelecionar(null); return; }
     this.selecionar(o.userData.nivel, o.userData.mesa);
   };
-  selecionar(nivel: 1 | 2, mesa: number) {
-    this.aoSelecionar({ nivel, mesa, nome: (nivel === 1 ? NOMES_N1 : NOMES_N2)[mesa] });
+  selecionar(nivel: 1 | 2, pa: number) {
+    const m = this.mesas.find((x) => x.nivel === nivel && x.i === pa);
+    if (m?.nome) this.aoSelecionar({ nivel, pa, nome: m.nome });
   }
+  private estadoMesa(m: Mesa): EstadoMesa { return !m.nome ? 'fora' : m.pausa ? 'pausa' : m.ticket ? 'atendendo' : 'livre'; }
   visaoGeral() {
     // no celular (tela em pé), olha mais de cima para a central inteira caber na largura
     if (this.el.clientWidth < 600) { this.controls.target.set(5, 0, 0); this.camera.position.set(5, 52, 16); }
@@ -396,7 +409,7 @@ export class Cena {
       filaN2: this.tickets.filter((k) => k.estado === 'fila2').length,
       atendidos: this.st.atendidos, noPrazo: this.st.noPrazo, abandonos: this.st.abandonos, escalados: this.st.escalados, resolvidosN2: this.st.resolvidosN2,
       esperaMedia: this.st.atendidos ? this.st.somaEspera / this.st.atendidos : 0,
-      mesas: this.mesas.map((x) => ({ nivel: x.nivel, nome: (x.nivel === 1 ? NOMES_N1 : NOMES_N2)[x.i], estado: !x.ativo ? 'fora' : x.ticket ? 'atendendo' : 'livre', feitos: x.feitos, ativo: x.ativo })),
+      mesas: this.mesas.filter((x) => x.nome).map((x) => ({ nivel: x.nivel, pa: x.i, nome: x.nome!, estado: this.estadoMesa(x), feitos: this.feitos.get(x.nome!) ?? 0 })),
     };
   }
   /** Posição na tela dos rótulos das áreas. */
@@ -405,6 +418,18 @@ export class Cena {
     return [new THREE.Vector3(-13.5, 0.1, 3.6), new THREE.Vector3(-8.6, 0.1, 5.6), new THREE.Vector3(4.8, 0.1, 5.6), new THREE.Vector3(14.3, 0.1, 4.9), new THREE.Vector3(21.6, 0.1, 4.9)].map((p) => {
       const v = p.clone().project(this.camera);
       return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height, visivel: v.z < 1 && v.x > -1.1 && v.x < 1.1 };
+    });
+  }
+
+  /** Posição na tela do crachá de cada PA ocupada (nome por cima da cabeça). */
+  crachas() {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return this.mesas.filter((m) => m.nome).map((m) => {
+      const cab = new THREE.Vector3();
+      m.pessoa.getWorldPosition(cab);
+      const v = cab.setY(2.5).project(this.camera);
+      return { nivel: m.nivel, pa: m.i, nome: m.nome!, estado: this.estadoMesa(m), alto: Math.floor(m.i / 2) % 2 === 1, // mesas vizinhas alternam a altura do crachá
+         x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height, visivel: v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 };
     });
   }
 
