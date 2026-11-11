@@ -372,7 +372,7 @@ export class Cena {
       pm.color.set(estado === 'atendendo' ? (m.nivel === 1 ? c.destaque : c.alerta) : estado === 'pausa' ? c.neutro : c.ok);
       const tm = m.tela.material as THREE.MeshStandardMaterial;
       tm.color.set(estado === 'fora' || estado === 'pausa' ? c.mesa2 : c.tela);
-      tm.emissive.set(estado === 'atendendo' ? c.tela : '#000000');
+      tm.emissive.set(estado === 'atendendo' ? c.tela : '#000000'); // design-ok: emissivo desligado, não é cor de interface
       const am = m.anel.material as THREE.MeshStandardMaterial;
       m.anel.visible = estado === 'atendendo';
       if (m.ticket) {
@@ -422,7 +422,7 @@ export class Cena {
   visaoGeral() {
     // no celular (tela em pé), olha mais de cima para a central inteira caber na largura
     if (this.el.clientWidth < 600) { this.controls.target.set(5, 0, 0); this.camera.position.set(5, 52, 16); }
-    else { this.controls.target.set(5, 0, -1.2); this.camera.position.set(5, 35, 27); }
+    else { this.controls.target.set(5, 0, -0.2); this.camera.position.set(5, 30, 24); }
   }
   zoom(f: number) {
     const d = this.camera.position.clone().sub(this.controls.target).multiplyScalar(f);

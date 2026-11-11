@@ -162,7 +162,7 @@ export function Grafico({ rotulo, altura = 280, n, rotulosX, y, y2, camadas, dic
             : c.tipo === 'linhaV' && c.rotulo ? <text key={`l${k}`} x={esq + passo * c.x} y={topo - 2} textAnchor="middle" className="g-ref halo" style={c.cor ? { fill: c.cor } : undefined}>{c.rotulo}</text> : null)}
           {/* rótulos no topo das barras */}
           {camadas.map((c, k) => c.tipo === 'barras' && c.rotulos ? c.valores.map((v, i) => (
-            <text key={`b${k}-${i}`} x={cx(i)} y={sy((c.base?.[i] ?? 0) + v, c.eixo) - 7} textAnchor="middle" className="g-rot halo" style={passo < 64 ? { fontSize: 10.5 } : undefined}>{c.rotulos![i]}</text>
+            <text key={`b${k}-${i}`} x={cx(i)} y={sy((c.base?.[i] ?? 0) + v, c.eixo) - 7} textAnchor="middle" className="g-rot halo" style={passo < 64 ? { fontSize: 'var(--fs-0)' } : undefined}>{c.rotulos![i]}</text>
           )) : null)}
           {/* eixo X */}
           {rotulosX.map((s, i) => i % cada === 0 && (
@@ -293,7 +293,7 @@ export function BarrasH({ rotulo, itens, dica, semDados = false, vazio, altura =
 export function rotuloAjustavel(t: string, cx: number, y: number, passo: number) {
   if (passo < 44) {
     const curto = t.length > 13 ? `${t.slice(0, 12)}…` : t;
-    return <text x={cx} y={y - 6} textAnchor="end" className="g-tick" style={{ fontSize: 11 }} transform={`rotate(-40 ${cx} ${y - 6})`}><title>{t}</title>{curto}</text>;
+    return <text x={cx} y={y - 6} textAnchor="end" className="g-tick" style={{ fontSize: 'var(--fs-1)' }} transform={`rotate(-40 ${cx} ${y - 6})`}><title>{t}</title>{curto}</text>;
   }
   const max = Math.max(7, Math.floor(passo / 6.4));
   const linhas: string[] = [];
@@ -301,7 +301,7 @@ export function rotuloAjustavel(t: string, cx: number, y: number, passo: number)
   t.split(' ').forEach((w) => { if ((cur + ' ' + w).trim().length > max && cur) { linhas.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); });
   linhas.push(cur);
   const mostrar = linhas.length > 3 ? [...linhas.slice(0, 2), `${linhas[2].slice(0, max - 1)}…`] : linhas;
-  return <text x={cx} y={y} textAnchor="middle" className="g-tick" style={{ fontSize: 11.5 }}>{mostrar.map((l, i) => <tspan key={i} x={cx} dy={i ? 13 : 0}>{l}</tspan>)}</text>;
+  return <text x={cx} y={y} textAnchor="middle" className="g-tick" style={{ fontSize: 'var(--fs-1)' }}>{mostrar.map((l, i) => <tspan key={i} x={cx} dy={i ? 13 : 0}>{l}</tspan>)}</text>;
 }
 
 /** Opacidade de uma barra mensal conforme o período escolhido. */

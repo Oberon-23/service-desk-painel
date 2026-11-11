@@ -8,7 +8,7 @@ const Dimensionamento = lazy(() => import('./telas/Dimensionamento'));
 const Sobre = lazy(() => import('./telas/Sobre'));
 
 const VISOES: Visao[] = [
-  { path: '/', label: 'Central ao vivo', curto: 'Ao vivo', icon: <Radio />, heading: 'Central ao vivo', sub: 'Simulação 3D da central: e se a equipe ou a demanda mudassem?', filtros: 'nenhum', semPeriodo: true },
+  { path: '/', label: 'Central ao vivo', curto: 'Ao vivo', icon: <Radio />, heading: 'Central ao vivo', sub: 'Console da coordenação: o que está acontecendo agora, quem está em cada PA e o que pede ação', filtros: 'nenhum', semPeriodo: true },
   { path: '/dimensionamento', label: 'Dimensionamento', curto: 'Escala', icon: <Users />, heading: 'Dimensionamento da equipe', sub: 'Quantas pessoas a central precisa em cada hora para cumprir a meta', filtros: 'nenhum', semPeriodo: true },
   { path: '/sobre', label: 'Sobre o projeto', curto: 'Sobre', icon: <BookOpen />, heading: 'Sobre o projeto', sub: 'O modelo, as fórmulas e como foi construído', filtros: 'nenhum', semPeriodo: true },
 ];

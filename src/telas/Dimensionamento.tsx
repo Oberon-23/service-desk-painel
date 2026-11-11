@@ -60,7 +60,7 @@ export default function Dimensionamento() {
             { tipo: 'linhaH', y: META_NS, tracejado: true, rotulo: 'Meta 80%' },
           ]}
           dica={(i) => ({ titulo: `${curva[i].n} analistas no N1${curva[i].n === c.n1 ? ' (hoje)' : ''}`, linhas: [{ nome: `Às ${pico.hora}h`, valor: pct(curva[i].pico, 1) }, { nome: 'No dia', valor: pct(curva[i].dia, 1) }] })} />
-        <p className="card-sub" style={{ marginTop: 6 }}>Eixo horizontal: número de analistas no N1. O contorno marca a equipe de hoje.</p>
+        <p className="card-sub nota-grafico">Eixo horizontal: número de analistas no N1. O contorno marca a equipe de hoje.</p>
       </Card>
     </>
   );

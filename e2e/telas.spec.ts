@@ -33,7 +33,7 @@ test('menu mostra as três seções sem rolar', async ({ page }) => {
 });
 
 test('dica do gráfico hora a hora com o teclado', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?aba=simulador');
   await page.getByRole('img', { name: 'Nível de serviço por hora' }).focus();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');

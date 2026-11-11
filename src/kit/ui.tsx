@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Component, Suspense, useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Flag, Info, Monitor, Moon, Sun } from 'lucide-react';
 import { STATUS_TXT, type Status } from './formato';
@@ -174,9 +174,9 @@ export type KpiProps = {
   spark?: number[];
 };
 
-export function Kpis({ itens }: { itens: KpiProps[] }) {
+export function Kpis({ itens, rotulo = 'Indicadores principais' }: { itens: KpiProps[]; rotulo?: string }) {
   return (
-    <section className="kpis" aria-label="Indicadores principais">
+    <section className="kpis" aria-label={rotulo}>
       {itens.map((k) => (
         <div className="card kpi" key={k.label}>
           <div className="k-top">
@@ -377,4 +377,32 @@ class ProtecaoErro extends Component<{ chave: string; children: ReactNode }, { e
       </div>
     );
   }
+}
+
+export type AbaDef<T extends string> = { id: T; rotulo: string; contagem?: number; alerta?: boolean };
+/** Abas acessíveis (padrão WAI-ARIA): setas, Home e End trocam de aba; só a aba ativa entra no Tab. */
+export function Abas<T extends string>({ rotulo, abas, valor, onChange, children }: { rotulo: string; abas: AbaDef<T>[]; valor: T; onChange: (v: T) => void; children: ReactNode }) {
+  const base = useId();
+  const teclar = (e: KeyboardEvent, i: number) => {
+    const n = abas.length;
+    const j = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i - 1 + n) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    onChange(abas[j].id);
+    document.getElementById(`${base}-t-${abas[j].id}`)?.focus();
+  };
+  return (
+    <section className="abas">
+      <div className="abas-lista" role="tablist" aria-label={rotulo}>
+        {abas.map((a, i) => (
+          <button key={a.id} id={`${base}-t-${a.id}`} type="button" role="tab" aria-selected={valor === a.id} aria-controls={`${base}-p`} tabIndex={valor === a.id ? 0 : -1}
+            className="aba" onClick={() => onChange(a.id)} onKeyDown={(e) => teclar(e, i)}>
+            {a.rotulo}
+            {a.contagem != null ? <span className={`aba-n${a.alerta ? ' alerta' : ''}`}>{a.contagem}</span> : null}
+          </button>
+        ))}
+      </div>
+      <div id={`${base}-p`} role="tabpanel" aria-labelledby={`${base}-t-${valor}`} className="abas-painel">{children}</div>
+    </section>
+  );
 }
