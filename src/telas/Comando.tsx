@@ -51,7 +51,7 @@ export default function Comando() {
             ))}
           </ul>
           <p className="nota" role="status">
-            {f.surto ? `Em andamento: ${f.surto.rotulo.toLowerCase()}, mais ${dur(f.surto.resta)}.` : 'Nenhuma crise em andamento.'}
+            {f.surto ? `Em andamento: ${f.surto.rotulo}, mais ${dur(f.surto.resta)}.` : 'Nenhuma crise em andamento.'}
             {f.incidente ? ` Incidente ${f.incidente.cod} (${CATEGORIAS[f.incidente.cat]}) declarado às ${relogio(f.incidente.desde)}; ${f.dia.desviados} contatos segurados pelo aviso.` : ''}
           </p>
         </Card>

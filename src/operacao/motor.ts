@@ -53,10 +53,10 @@ export type EstadoAnalista = 'fora' | 'livre' | 'atendendo' | 'pausa';
 export type Seg = { de: number; ate: number | null; estado: EstadoAnalista };
 export type Evento = { id: number; min: number; tipo: 'equipe' | 'fila' | 'n2' | 'crise' | 'copiloto'; texto: string };
 export type TipoCrise = 'vpn' | 'pico' | 'faltas';
-export const CRISES: Record<TipoCrise, { rotulo: string; texto: string }> = {
-  vpn: { rotulo: 'Queda da VPN', texto: 'Por 90 minutos chegam quase o dobro de contatos, todos sobre VPN.' },
-  pico: { rotulo: 'Pico de demanda', texto: 'Por 60 minutos o volume sobe 60% em todos os assuntos.' },
-  faltas: { rotulo: 'Duas faltas no N1', texto: 'Dois analistas do N1 saem da operação agora.' },
+export const CRISES: Record<TipoCrise, { rotulo: string; nome: string; texto: string }> = {
+  vpn: { rotulo: 'Queda da VPN', nome: 'queda da VPN', texto: 'Por 90 minutos chegam quase o dobro de contatos, todos sobre VPN.' },
+  pico: { rotulo: 'Pico de demanda', nome: 'pico de demanda', texto: 'Por 60 minutos o volume sobe 60% em todos os assuntos.' },
+  faltas: { rotulo: 'Duas faltas no N1', nome: 'duas faltas no N1', texto: 'Dois analistas do N1 saem da operação agora.' },
 };
 
 type Ticket = {
@@ -236,7 +236,7 @@ export class Motor {
       return;
     }
     this.surto = tipo === 'vpn' ? { tipo, cat: CATEGORIAS.indexOf('VPN'), ate: this.minuto + 90, fator: 0.9 } : { tipo, cat: null, ate: this.minuto + 60, fator: 0.6 };
-    this.registrar('crise', `Treino de crise: ${CRISES[tipo].rotulo.toLowerCase()} começou.`);
+    this.registrar('crise', `Treino de crise: ${CRISES[tipo].nome} começou.`);
   }
   /** Declara incidente para um assunto: aviso na URA e no portal desvia contatos, roteiro pronto encurta o atendimento e um chamado pai P1 vai para o N2. */
   declararIncidente(cat: number) {
@@ -459,7 +459,7 @@ export class Motor {
         chegadasHora: this.dia.chegadasHora.slice(), previstoHora: chegadas({ ...ATUAL, segunda: c.segunda }),
       },
       recente: { total: this.recentes.length, porCat },
-      surto: this.surto ? { tipo: this.surto.tipo, rotulo: CRISES[this.surto.tipo].rotulo, resta: this.surto.ate - t, cat: this.surto.cat } : null,
+      surto: this.surto ? { tipo: this.surto.tipo, rotulo: CRISES[this.surto.tipo].nome, resta: this.surto.ate - t, cat: this.surto.cat } : null,
       incidente: this.incidente ? { ...this.incidente } : null,
       suspeita: this.suspeita ? { ...this.suspeita, n: porCat[this.suspeita.cat], normal: Math.max(1, Math.round((chegadas(c)[Math.min(DIA_MIN / 60 - 1, Math.floor(t / 60))] / 2) * PESO_CATEGORIAS[this.suspeita.cat])) } : null,
       feed: this.feed.slice(0, 40),

@@ -44,7 +44,7 @@ test('treino de crise: queda da VPN vira incidente pelo copiloto', async ({ page
   test.setTimeout(60_000);
   await page.goto('/');
   await page.getByRole('listitem').filter({ hasText: 'Queda da VPN' }).getByRole('button', { name: 'Disparar' }).click();
-  await expect(page.getByText(/Em andamento: queda da vpn/)).toBeVisible();
+  await expect(page.getByText(/Em andamento: queda da VPN/)).toBeVisible();
   // a 20×, o copiloto percebe em uns 20 minutos simulados (1 s); a queda dura 90 (4,5 s)
   await page.getByRole('button', { name: '20×' }).click();
   const item = copiloto(page).filter({ hasText: 'Possível incidente: VPN' });
