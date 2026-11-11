@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { MOTIVOS, type Motivo } from '../../central/tipos';
+import { MOTIVOS, type Motivo } from '../../operacao/motor';
 
 export function Faixa({ id, rotulo, valor, min, max, passo = 1, un, hoje, ajuda, onChange }: { id: string; rotulo: string; valor: number; min: number; max: number; passo?: number; un: string; hoje: number; ajuda: string; onChange: (v: number) => void }) {
   return (

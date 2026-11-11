@@ -48,8 +48,8 @@ export type Visao = {
   semPeriodo?: boolean;
 };
 
-export function Moldura({ produto, icone, visoes, asOf, rodape }: {
-  produto: string; icone: ReactNode; visoes: Visao[]; asOf: string; rodape: ReactNode;
+export function Moldura({ produto, icone, visoes, asOf, rodape, extra }: {
+  produto: string; icone: ReactNode; visoes: Visao[]; asOf: string; rodape: ReactNode; extra?: ReactNode;
 }) {
   const { pathname } = useLocation();
   const atual = visoes.find((v) => v.path === pathname) ?? visoes[0];
@@ -83,7 +83,7 @@ export function Moldura({ produto, icone, visoes, asOf, rodape }: {
             <p>{atual.sub}</p>
           </div>
           {semFiltros ? (
-            asOf ? <span className="asof">Dados até {asOf}</span> : <span />
+            asOf ? <span className="asof">Dados até {asOf}</span> : (extra ?? <span />)
           ) : (
             <div className="filtros">
               {!atual.semPeriodo ? (

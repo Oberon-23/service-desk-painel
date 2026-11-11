@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-const ROTAS = ['/', '/?aba=chamados', '/?aba=simulador', '/dimensionamento', '/sobre'];
+const ROTAS = ['/', '/filas', '/analistas', '/planejamento', '/planejamento?aba=ese', '/planejamento?aba=escala', '/mural', '/sobre'];
 type Opts = ConstructorParameters<typeof AxeBuilder>[0];
 
 for (const tema of ['light', 'dark'] as const) {

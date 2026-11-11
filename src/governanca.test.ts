@@ -45,7 +45,7 @@ describe('cores', () => {
 
 describe('tipografia e forma', () => {
   it('todo tamanho de fonte vem da escala --fs-*', () => {
-    const soltos = [...cssForaDosTokens(css).matchAll(/font-size:\s*([^;}]+)/g)].map((m) => m[1].trim()).filter((v) => !/^var\(--fs-[0-7]\)$|^[0-9.]+em$|^inherit$/.test(v));
+    const soltos = [...cssForaDosTokens(css).matchAll(/font-size:\s*([^;}]+)/g)].map((m) => m[1].trim()).filter((v) => !/^var\(--fs-([0-7]|mural)\)$|^[0-9.]+em$|^inherit$/.test(v));
     expect(soltos).toEqual([]);
   });
   it('todo raio vem dos tokens --r-*', () => {

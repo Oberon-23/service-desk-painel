@@ -5,44 +5,64 @@ O que dá para checar automaticamente roda no CI (`src/governanca.test.ts`). O r
 
 ## 1. Para quem e para quê
 
-**Quem usa:** a coordenação do service desk (coordenador, supervisor de turno, analista de qualidade).
+**Quem usa:** a coordenação do service desk (coordenador, supervisor de turno, analista de qualidade) e, no mural, a equipe da sala.
 
-**Perguntas que a tela responde, nesta ordem:**
+**Perguntas que o painel responde, e onde:**
 
-1. Como está a operação **agora**? (nível de serviço, fila, abandono, aderência, N2 vencido)
-2. **O que pede ação** neste momento? (pontos de atenção)
-3. **Quem** está em cada PA e quem está em pausa há tempo demais? (aba Equipe)
-4. Quais chamados do N2 **vencem primeiro**? (aba Chamados do N2)
-5. **E se** a equipe ou a demanda mudassem? (aba Simulador)
+| Pergunta | Tela |
+|---|---|
+| Como está a operação **agora** e **qual é a próxima ação**? | Comando |
+| Qual **fila** está apertada, quem atende cada canal e o que vence primeiro no N2? | Filas |
+| **Quem** está em cada PA, quem está em pausa demais e como cada pessoa está indo? | Analistas |
+| O dia está saindo como o **previsto**? E se a equipe ou a demanda mudarem? Quantas pessoas cada hora pede? | Planejamento |
+| O que a sala precisa ver **de longe**? | Mural (TV) |
 
-O que não responde uma dessas perguntas não entra na Central ao vivo. Vai para Dimensionamento (planejamento) ou Sobre (método).
+O que não responde uma dessas perguntas não entra. A regra para escolher indicador, tirada da pesquisa de mercado: **só entra número que muda uma decisão do turno**, e todo indicador de velocidade anda junto com um de qualidade (nível de serviço com satisfação, tempo médio com resolução no primeiro contato).
 
-## 2. Organização da tela
+## 2. Organização
 
 ```
-Agora                      → 5 indicadores do dia até este momento (simulação ao vivo)
-Sala em 3D | Pontos de atenção
-Abas: Equipe · Chamados do N2 · Simulador
+Comando       Agora (5 indicadores) → Sala em 3D | Copiloto → Treino de crise | Histórico do turno
+Filas         Telefone | Chat | Portal → Quem atende o quê | Assuntos em 30 min → Chamados do N2
+Analistas     Aderência → Logar → Tabela por PA → Linha do tempo do dia
+Planejamento  Abas: Hoje contra o previsto · E se…? · Escala ideal
+Mural         Aviso → 6 números grandes → Sala em 3D
 ```
 
-- **Ao vivo e previsto nunca se misturam.** Números da simulação animada ficam em "Agora", nos pontos de atenção e nas abas Equipe e Chamados. Números do modelo de fila (Erlang C) ficam só na aba Simulador, com "previsão" no texto de ajuda.
-- **Pontos de atenção** são a lista de trabalho da coordenação. Vêm em ordem de gravidade (vermelho antes de laranja) e cada item leva à aba onde se resolve. A regra de cada alerta está em `pontosDeAtencao()` (`src/telas/central/comum.ts`). Lista vazia mostra "Nada pedindo atenção agora", nunca um espaço em branco.
-- **A aba ativa vai na URL** (`?aba=chamados`), para dar para mandar o link direto.
-- **Cada aba tem uma tarefa.** Equipe: logar, pausar e deslogar. Chamados: priorizar o N2. Simulador: testar cenários.
+- **Uma operação só.** O motor (`src/operacao/motor.ts`) roda acima das rotas: trocar de tela não reinicia o dia. O relógio e a velocidade ficam no topo de todas as telas.
+- **Ao vivo e previsto não se misturam.** Comando, Filas, Analistas e Mural mostram a simulação ao vivo. O modelo de fila (Erlang C) aparece em Planejamento e, como explicação, nas sugestões do copiloto.
+- **Toda ação deixa rastro.** Logar, pausar, mudar canal, crises e ações do copiloto vão para o Histórico do turno.
+- **O copiloto sugere, a coordenação decide.** Nenhuma ação é aplicada sem clique.
 
-## 3. Metas e limites
+## 3. Metas, limites e regras
 
-Ficam num lugar só (`comum.ts` e `fila.ts`) e aparecem na tela junto do número.
+Ficam num lugar só (`src/operacao/motor.ts`, `src/telas/partes/formatos.ts` e `src/fila.ts`) e aparecem na tela junto do número.
 
 | O quê | Meta ou limite |
 |---|---|
-| Nível de serviço (atendidos em até 60 s) | ≥ 80% |
-| Abandono | ≤ 5% |
-| SLA do N2 (modelo) | ≥ 90% em até 8 h |
+| Alvo de espera por canal | Telefone 1 min (meta 80%) · Chat 2 min (80%) · Portal 15 min (90%) |
+| Abandono (telefone e chat) | ≤ 5% |
+| Satisfação | ≥ 85% de “satisfeito” |
+| Resolução no primeiro contato | referência 70% |
+| SLA do N2 | ≥ 90% no prazo · P1 2 h · P2 4 h · P3 8 h · P4 16 h (horas úteis) |
 | Aderência à escala | ≥ 90% dos escalados disponíveis |
-| Fila do N1 | alerta acima de 5 contatos |
-| Prazo do N2 por prioridade | P1 2 h · P2 4 h · P3 8 h · P4 16 h (horas úteis) |
 | Pausas | Descanso 10 · Lanche 20 · Banheiro 5 · Feedback 15 · Treinamento 30 · Particular 5 (min) |
+| Tempo médio destoando | mais de 25% acima da média do N1, com pelo menos 8 atendimentos |
+
+### Regras do copiloto (`src/operacao/copiloto.ts`)
+
+Em ordem de gravidade. Cada uma tem teste em `src/operacao/motor.test.ts`.
+
+1. **Possível incidente:** um assunto com 8 ou mais contatos em 30 min e 2,2× o normal. O alerta só some quando o volume cai abaixo de 1,4× (histerese, para não piscar). Ação: declarar incidente.
+2. **Chamado P1** aberto e **chamados vencidos** no N2.
+3. **Pausa acima do limite.** Ação: chamar de volta.
+4. **Fila de um canal acima do alvo** (3 ou mais esperando além do alvo). Ação, nesta ordem: habilitar no canal alguém livre; chamar de volta quem está em pausa adiável (descanso, feedback, treinamento); logar quem está fora.
+5. **Gente da escala fora da operação.** Ação: logar alguém de fora da escala para cobrir.
+6. **Previsão:** o Erlang C pede mais analistas do que há logados nesta hora (ou na próxima, depois do minuto 30). Ação: chamar da pausa ou logar.
+7. **Janela para feedback** (informativo): fila zerada, 3 ou mais livres e folga de 2 pelo modelo.
+8. **Tempo médio destoando** (informativo).
+
+Uma pessoa entra em no máximo uma sugestão com ação, para as sugestões não se contradizerem.
 
 ## 4. Tokens
 
@@ -62,7 +82,7 @@ Todos em `src/kit/tema.css`, no `:root` e nos blocos de tema. **Fora desses bloc
 
 **Cor nunca vai sozinha.** Toda situação tem texto ("Na meta", "Vencido há 1h40", "Em pausa") além da cor.
 
-### Tipografia: 8 tamanhos
+### Tipografia: 8 tamanhos e o do mural
 
 | Token | px | Uso |
 |---|---|---|
@@ -74,6 +94,7 @@ Todos em `src/kit/tema.css`, no `:root` e nos blocos de tema. **Fora desses bloc
 | `--fs-5` | 17 | Título de cartão e de seção |
 | `--fs-6` | 22 | Título de página |
 | `--fs-7` | 28 | Número de indicador |
+| `--fs-mural` | 30–64 | Número do mural, lido de longe (cresce com a tela) |
 
 Números em tabela e indicador usam `font-variant-numeric: tabular-nums`. Códigos (INC…, PA 03) usam `--mono`.
 
@@ -90,6 +111,9 @@ Componentes do kit (`src/kit`) que são compartilhados com os outros painéis da
 |---|---|
 | `Card` | Todo bloco de conteúdo, sempre com título (`titulo`) |
 | `Kpis` | Até 5 indicadores de topo, cada um com meta e situação quando houver meta |
+| `Copiloto` | Lista de sugestões com ação de um clique; vermelho, laranja e azul (informativo) |
+| `Sala3D` / `Relogio` | A sala e o relógio da simulação; a sala sempre vem com a lista “Equipe na sala” (alternativa ao clique na cena) |
+| `.fila-card` | Uma fila por canal: agora, histórico do dia (pico a cada 5 min) e números do dia |
 | `Manchete` | A frase-resumo de uma análise (só no Simulador) |
 | `Abas` | Trocar de tarefa na mesma página, com setas, Home e End no teclado |
 | `Segmentado` | Trocar o modo de uma mesma vista (velocidade 1×, 5×, 20×) |
@@ -115,7 +139,7 @@ Componentes do kit (`src/kit`) que são compartilhados com os outros painéis da
 |---|---|
 | Carregando | "Carregando a central 3D…" na cena; "—" nos indicadores |
 | Vazio | Texto que explica e diz o próximo passo ("Ninguém logado. Use 'Logar analista'…") |
-| Sem 3D | Aviso no lugar da cena. O Simulador continua funcionando |
+| Sem 3D | Aviso no lugar da cena. Indicadores, copiloto e todas as outras telas continuam funcionando, porque o motor não depende do 3D |
 | Nada a fazer | "Nada pedindo atenção agora", com ícone de ok |
 
 ## 8. Acessibilidade
