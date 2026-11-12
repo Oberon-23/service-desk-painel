@@ -4,6 +4,14 @@ Central de comando de um service desk fictício (a TI da Rotalume) para a coorde
 
 Projeto de portfólio de [Breno Silva](https://github.com/Oberon-23). Mesma identidade do [painel de qualidade](https://painel-qualidade-rotalume.vercel.app) e do [SGQ](https://sqgrotalume.vercel.app) da Rotalume.
 
+## Em 30 segundos
+
+- **Problema:** em um service desk, a coordenação só percebe uma queda (da VPN, por exemplo) quando a fila já estourou.
+- **O que fiz:** uma central de comando em que a operação roda sozinha no navegador. A coordenação pode logar e pausar analistas, mudar quem atende cada canal e declarar incidente, e vê o efeito na hora. Um copiloto de regras sugere a próxima ação, e há uma tela de monitoramento com 12 regras de alerta.
+- **Como sei que funciona:** testes do motor, do modelo de fila (Erlang C) e do copiloto, além de testes de ponta a ponta e de acessibilidade, rodam a cada envio.
+
+![Demonstração: treino de queda da VPN, o copiloto sugere declarar incidente e o monitoramento mostra a saúde dos serviços](docs/img/demo.gif)
+
 ## O que tem
 
 | Tela | O que tem |
