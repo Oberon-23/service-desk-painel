@@ -8,6 +8,7 @@
  *
  * Não depende de React nem de three.js: as telas leem `foto()` e a cena 3D só desenha.
  */
+import { amostraZero, Vigia, type Alerta, type Amostra, type Servico, type Sev } from './alertas';
 import { ABRE, ATUAL, CATEGORIAS, chegadas, FECHA, NOMES_N1, NOMES_N2, PESO_CATEGORIAS, TMA_N2, tmaEfetivo, type Cenario } from '../fila';
 
 /* ---------------- regras da operação ---------------- */
@@ -51,7 +52,7 @@ const BACKLOG: [number, Prio, number][] = [[-470, 3, 1], [-455, 3, 4], [-440, 3,
 
 export type EstadoAnalista = 'fora' | 'livre' | 'atendendo' | 'pausa';
 export type Seg = { de: number; ate: number | null; estado: EstadoAnalista };
-export type Evento = { id: number; min: number; tipo: 'equipe' | 'fila' | 'n2' | 'crise' | 'copiloto'; texto: string };
+export type Evento = { id: number; min: number; tipo: 'equipe' | 'fila' | 'n2' | 'crise' | 'copiloto' | 'alerta'; texto: string };
 export type TipoCrise = 'vpn' | 'pico' | 'faltas';
 export const CRISES: Record<TipoCrise, { rotulo: string; nome: string; texto: string }> = {
   vpn: { rotulo: 'Queda da VPN', nome: 'queda da VPN', texto: 'Por 90 minutos chegam quase o dobro de contatos, todos sobre VPN.' },
@@ -102,6 +103,14 @@ export type Foto = {
   incidente: { cat: number; cod: string; desde: number } | null;
   suspeita: { cat: number; desde: number; n: number; normal: number } | null;
   feed: Evento[];
+  monitor: {
+    /** amostras por minuto (últimas 3 horas) */
+    serie: Amostra[];
+    alertas: Alerta[];
+    saude: Record<Servico, Sev | 'ok'>;
+    leituras: Record<string, { valor: number | null; sev: Sev | null }>;
+    tempos: { mtta: number | null; mttr: number | null; nRec: number; nRes: number };
+  };
 };
 
 export const codigo = (id: number) => `INC${String(4821000 + id).padStart(7, '0')}`;
@@ -129,6 +138,10 @@ export class Motor {
   private feed: Evento[] = [];
   private proximaAmostra = 0;
   private picoJanela: Record<Canal, number> = { telefone: 0, chat: 0, portal: 0 };
+  /** monitoramento: uma amostra por minuto e o vigia das regras de alerta */
+  serie: Amostra[] = [];
+  private cur: Amostra = amostraZero(0);
+  vigia = new Vigia();
   private chaveInicial = '';
 
   constructor(aquecer = true) { this.iniciar(aquecer); }
@@ -137,6 +150,7 @@ export class Motor {
   iniciar(aquecer = true) {
     this.s = Motor.SEMENTE; this.seq = 0; this.evSeq = 0; this.minuto = 0; this.tickets = []; this.saidas = []; this.feed = []; this.recentes = [];
     this.surto = null; this.incidente = null; this.suspeita = null; this.proximaAmostra = 0;
+    this.serie = []; this.cur = amostraZero(0); this.vigia = new Vigia();
     this.params = { volume: ATUAL.volume, tma: ATUAL.tma, fcr: ATUAL.fcr, autoatendimento: ATUAL.autoatendimento, segunda: ATUAL.segunda };
     this.filas = { telefone: filaZero(), chat: filaZero(), portal: filaZero() };
     this.dia = { escalados: 0, n2NoPrazo: 0, n2Atrasados: 0, desviados: 0, chegadasHora: Array(DIA_MIN / 60).fill(0) };
@@ -164,6 +178,11 @@ export class Motor {
   private registrar(tipo: Evento['tipo'], texto: string) { this.feed.unshift({ id: this.evSeq++, min: this.minuto, tipo, texto }); if (this.feed.length > 60) this.feed.length = 60; }
   /** Anota no histórico uma ação aplicada pelo copiloto. */
   anotar(texto: string) { this.registrar('copiloto', texto); }
+  /** A coordenação reconhece um alerta ("estou vendo"). */
+  reconhecer(id: number) {
+    const a = this.vigia.reconhecer(id, this.minuto);
+    if (a) this.registrar('alerta', `Alerta reconhecido pela coordenação: ${a.nome.toLowerCase()}.`);
+  }
 
   /* ---------------- comandos da coordenação ---------------- */
   private mudar(a: Analista, estado: EstadoAnalista, motivo: Motivo | null = null) {
@@ -261,18 +280,21 @@ export class Motor {
     this.filas[canal].recebidos++;
     this.dia.chegadasHora[Math.min(this.dia.chegadasHora.length - 1, Math.floor(t / 60))]++;
     this.recentes.push({ t, cat });
+    this.cur.chegadas++;
   }
 
   private avaliar(a: Analista, fila: EstatFila | null, pBom: number) {
     if (this.rnd() > 0.4) return; // nem todo mundo responde a pesquisa
     const bom = this.rnd() < pBom ? 1 : 0;
     a.csatN++; a.csatBom += bom;
+    this.cur.csatN++; this.cur.csatBom += bom;
     if (fila) { fila.csatN++; fila.csatBom += bom; }
   }
 
   private passo(d: number) {
     this.minuto += d;
     if (this.minuto >= DIA_MIN) this.novoDia();
+    if (Math.floor(this.minuto) > this.cur.min) this.fecharMinuto();
     const t = this.minuto;
     const c = this.cenario;
     for (const a of this.analistas) {
@@ -342,7 +364,7 @@ export class Motor {
     for (let i = this.tickets.length - 1; i >= 0; i--) {
       const k = this.tickets[i];
       if (k.estado === 'fila' && k.paciencia !== null && t - k.chegou > k.paciencia) {
-        this.filas[k.canal].abandonos++;
+        this.filas[k.canal].abandonos++; this.cur.abandonos++;
         this.saidas.push({ id: k.id, tipo: 'abandono' });
         this.tickets.splice(i, 1);
       } else if ((k.estado === 'fila2' || k.estado === 'n2') && !k.vencidoAvisado && t > k.prazo && k.escalou >= 0) {
@@ -368,6 +390,7 @@ export class Motor {
       a.ticket = k; this.mudar(a, 'atendendo');
       f.atendidos++; f.somaEspera += espera;
       if (espera <= CANAIS[k.canal].alvo) f.noAlvo++;
+      this.cur.atendidos++; this.cur.somaEspera += espera; if (espera <= CANAIS[k.canal].alvo) this.cur.noAlvo++;
     }
     // N2: o que vence primeiro sai primeiro
     const livres2 = this.analistas.filter((a) => a.nivel === 2 && a.estado === 'livre').sort((a, b) => a.desde - b.desde);
@@ -395,11 +418,38 @@ export class Motor {
     for (let k = 0; k < PESO_CATEGORIAS.length; k++) if (n(k) >= 8 && n(k) >= 2.2 * esperado(k)) { this.suspeita = { cat: k, desde: t }; return; }
   }
 
+  /** Fecha a amostra do minuto (retrato das filas e da equipe) e roda as regras de alerta. */
+  private fecharMinuto() {
+    const a = this.cur, t = this.minuto;
+    const c = this.cenario;
+    a.previsto = chegadas(c)[Math.min(DIA_MIN / 60 - 1, Math.floor(a.min / 60))] / 60;
+    for (const k of this.tickets) {
+      if (k.estado === 'fila') { a.fila[k.canal]++; a.espera[k.canal] = Math.max(a.espera[k.canal], t - k.chegou); }
+      else if (k.estado === 'fila2') a.fila.n2++;
+    }
+    for (const x of this.analistas) if (x.nivel === 1) { if (x.estado === 'atendendo') a.atendendo++; if (x.estado === 'atendendo' || x.estado === 'livre') a.disponiveis++; }
+    this.serie.push(a);
+    if (this.serie.length > DIA_MIN) this.serie.shift();
+    this.cur = amostraZero(Math.floor(t));
+    const n2 = this.tickets.filter((k) => k.estado === 'fila2' || k.estado === 'n2');
+    const escalados = this.analistas.filter((x) => x.escalado);
+    const estado = {
+      vencidosN2: n2.filter((k) => t > k.prazo).length, p1Abertos: n2.filter((k) => k.prio === 1).length,
+      aderencia: escalados.length ? escalados.filter((x) => x.estado === 'livre' || x.estado === 'atendendo').length / escalados.length : 1,
+      pausasEstouradas: this.analistas.filter((x) => x.estado === 'pausa' && x.motivo && t - x.desde > MOTIVOS[x.motivo].limite).length,
+    };
+    for (const m of this.vigia.avaliar(a.min, { serie: this.serie, estado })) {
+      const v = m.a.valor === null ? '' : ` (${m.a.limite.replace(/^[<>≥] /, 'limite ')})`;
+      this.registrar('alerta', m.tipo === 'abriu' ? `Alerta ${m.a.sev === 'crit' ? 'crítico' : 'de atenção'}: ${m.a.nome.toLowerCase()}${v}.` : m.tipo === 'piorou' ? `Alerta ficou crítico: ${m.a.nome.toLowerCase()}.` : `Normalizou: ${m.a.nome.toLowerCase()}, depois de ${Math.round(m.a.resolvido! - m.a.aberto)} min.`);
+    }
+  }
+
   private novoDia() {
     this.minuto -= DIA_MIN;
     this.filas = { telefone: filaZero(), chat: filaZero(), portal: filaZero() };
     this.dia = { escalados: 0, n2NoPrazo: 0, n2Atrasados: 0, desviados: 0, chegadasHora: Array(DIA_MIN / 60).fill(0) };
     this.recentes = []; this.surto = null; this.suspeita = null; this.proximaAmostra = 0; this.feed = [];
+    this.serie = []; this.cur = amostraZero(0); this.vigia.zerar();
     // as filas do N1 não passam a noite; os chamados do N2 sim
     for (const k of this.tickets) if (k.estado === 'fila' || k.estado === 'n1') this.saidas.push({ id: k.id, tipo: 'abandono' });
     this.tickets = this.tickets.filter((k) => k.estado === 'fila2' || k.estado === 'n2');
@@ -463,6 +513,10 @@ export class Motor {
       incidente: this.incidente ? { ...this.incidente } : null,
       suspeita: this.suspeita ? { ...this.suspeita, n: porCat[this.suspeita.cat], normal: Math.max(1, Math.round((chegadas(c)[Math.min(DIA_MIN / 60 - 1, Math.floor(t / 60))] / 2) * PESO_CATEGORIAS[this.suspeita.cat])) } : null,
       feed: this.feed.slice(0, 40),
+      monitor: {
+        serie: this.serie.slice(-180).map((x) => ({ ...x, espera: { ...x.espera }, fila: { ...x.fila } })),
+        alertas: this.vigia.alertas.map((x) => ({ ...x })), saude: this.vigia.saude(), leituras: { ...this.vigia.leituras }, tempos: this.vigia.tempos(),
+      },
     };
   }
 }

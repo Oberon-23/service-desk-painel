@@ -12,6 +12,7 @@ O que dá para checar automaticamente roda no CI (`src/governanca.test.ts`). O r
 | Pergunta | Tela |
 |---|---|
 | Como está a operação **agora** e **qual é a próxima ação**? | Comando |
+| Algum **serviço** está fora do normal? Desde quando, e alguém já está olhando? | Monitoramento |
 | Qual **fila** está apertada, quem atende cada canal e o que vence primeiro no N2? | Filas |
 | **Quem** está em cada PA, quem está em pausa demais e como cada pessoa está indo? | Analistas |
 | O dia está saindo como o **previsto**? E se a equipe ou a demanda mudarem? Quantas pessoas cada hora pede? | Planejamento |
@@ -22,6 +23,7 @@ O que não responde uma dessas perguntas não entra. A regra para escolher indic
 ## 2. Organização
 
 ```
+Monitoramento Saúde (7 serviços) → Alertas ativos → Sinais de ouro (2 h) → Linha do tempo do dia → Regras
 Comando       Agora (5 indicadores) → Sala em 3D | Copiloto → Treino de crise | Histórico do turno
 Filas         Telefone | Chat | Portal → Quem atende o quê | Assuntos em 30 min → Chamados do N2
 Analistas     Aderência → Logar → Tabela por PA → Linha do tempo do dia
@@ -48,6 +50,28 @@ Ficam num lugar só (`src/operacao/motor.ts`, `src/telas/partes/formatos.ts` e `
 | Aderência à escala | ≥ 90% dos escalados disponíveis |
 | Pausas | Descanso 10 · Lanche 20 · Banheiro 5 · Feedback 15 · Treinamento 30 · Particular 5 (min) |
 | Tempo médio destoando | mais de 25% acima da média do N1, com pelo menos 8 atendimentos |
+
+### Regras de alerta do monitoramento (`src/operacao/alertas.ts`)
+
+Referências: telas de saúde de serviço (ServiceNow: a cor do serviço é o pior alerta aberto), prática de NOC (“mostre problemas, não status”; leitura em 10 segundos; comparar com uma base) e sinais de ouro de SRE (volume, espera, erros e saturação, cada um com a linha do limite).
+
+| Serviço | Alerta | Janela | Atenção | Crítico |
+|---|---|---|---|---|
+| Telefone · Chat · Portal | Maior espera | agora | 2× o alvo do canal | 4× o alvo |
+| Atendimento N1 | Nível de serviço | 30 min | < 80% | < 70% |
+| Atendimento N1 | Abandono | 30 min | > 5% | > 10% |
+| Atendimento N1 | Volume contra o previsto | 30 min | > 140% | > 170% |
+| Equipe | Ocupação do N1 | 15 min | > 90% | > 97% |
+| Equipe | Aderência à escala | agora | < 90% | < 80% |
+| Equipe | Pausas acima do limite | agora | ≥ 1 | ≥ 3 |
+| N2 | Chamados vencidos | agora | ≥ 1 | ≥ 3 |
+| N2 | Chamado P1 aberto | agora | — | ≥ 1 |
+| Experiência | Satisfação | 60 min | < 85% | < 75% |
+
+- **Abre** depois de 2 minutos seguidos fora do limite e **fecha** depois de 3 minutos de volta ao normal: nem alarme falso por um pico isolado, nem alerta piscando.
+- Regras de taxa só valem com amostra mínima (10 contatos em 30 min, 15 respostas de satisfação em 60 min). O volume usa 40% e 70% porque ±20% em meia hora é variação normal.
+- **Reconhecer** registra que a coordenação está tratando. O painel mede o tempo até reconhecer (MTTA) e até normalizar (MTTR).
+- Todo alerta (abriu, ficou crítico, normalizou, reconhecido) vai para o histórico do turno.
 
 ### Regras do copiloto (`src/operacao/copiloto.ts`)
 

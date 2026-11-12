@@ -16,7 +16,7 @@ import Copiloto from './partes/Copiloto';
 import Sala3D from './partes/Sala3D';
 import { dur } from './partes/formatos';
 
-const TIPO_TXT = { equipe: 'Equipe', fila: 'Filas', n2: 'N2', crise: 'Crise', copiloto: 'Copiloto' } as const;
+const TIPO_TXT = { alerta: 'Alerta', equipe: 'Equipe', fila: 'Filas', n2: 'N2', crise: 'Crise', copiloto: 'Copiloto' } as const;
 
 export default function Comando() {
   const { foto: f, agir } = useOperacao();
@@ -27,7 +27,8 @@ export default function Comando() {
       <div className="secao-h">
         <h2>Agora</h2>
         <span>Hoje até {f.relogio} · simulação</span>
-        <Link className="btn-sec secao-acao" to="/mural"><MonitorPlay size={14} aria-hidden="true" />Abrir mural</Link>
+        <Link className="btn-sec secao-acao" to="/monitoramento">Ver monitoramento</Link>
+        <Link className="btn-sec" to="/mural"><MonitorPlay size={14} aria-hidden="true" />Abrir mural</Link>
       </div>
       <Indicadores />
 

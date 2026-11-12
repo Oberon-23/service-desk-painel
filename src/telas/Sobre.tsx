@@ -15,6 +15,7 @@ export default function Sobre() {
         <div className="prosa">
           <ul>
             <li><b>Comando:</b> cinco indicadores do dia, a sala em 3D, o copiloto, o treino de crise e o histórico do turno.</li>
+            <li><b>Monitoramento:</b> a saúde de cada serviço, os alertas abertos (com limite de atenção e crítico, reconhecimento, MTTA e MTTR), os sinais das últimas 2 horas e a linha do tempo do dia.</li>
             <li><b>Filas:</b> uma fila por canal, com alvo próprio, a matriz de quem atende o quê, os assuntos dos últimos 30 minutos e os chamados do N2 por prazo.</li>
             <li><b>Analistas:</b> PAs, pausas com motivo e limite, aderência à escala, indicadores por pessoa e a linha do tempo do dia.</li>
             <li><b>Planejamento:</b> hoje contra o previsto, o “e se” e a escala ideal hora a hora.</li>

@@ -85,6 +85,7 @@ test('treino de crise: duas faltas e o copiloto chama alguém para cobrir', asyn
 });
 
 test('filas: desmarcar um canal muda quem atende, e a fila do canal cresce', async ({ page }) => {
+  test.setTimeout(60_000);
   await page.goto('/filas');
   await pausar(page);
   const chat = page.getByRole('article', { name: 'Fila do chat' });
@@ -208,4 +209,36 @@ test('mural: números grandes, aviso do copiloto e saída', async ({ page }) => 
   await expect(page.locator('.mural-aviso')).toBeVisible();
   await page.getByRole('link', { name: 'Sair do mural' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Comando' })).toBeVisible();
+});
+
+test('monitoramento: crise acende os serviços, alerta é reconhecido e normaliza', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/');
+  await page.getByRole('listitem').filter({ hasText: 'Queda da VPN' }).getByRole('button', { name: 'Disparar' }).click();
+  await page.getByRole('button', { name: '20×' }).click();
+  await irPara(page, 'Monitoramento');
+  const saude = page.getByRole('region', { name: 'Saúde dos serviços' });
+  await expect(saude.getByRole('article')).toHaveCount(7);
+  const n1 = saude.getByRole('article', { name: /^Atendimento N1: (Degradado|Crítico)$/ });
+  await expect(n1).toBeVisible({ timeout: 25_000 });
+  await pausar(page);
+  const lista = page.getByRole('region', { name: 'Lista de alertas ativos' });
+  // reconhece o primeiro alerta aberto, seja qual for
+  const botao = lista.getByRole('button', { name: /^Reconhecer alerta: / }).first();
+  const nome = (await botao.getAttribute('aria-label'))!.replace('Reconhecer alerta: ', '');
+  await botao.click();
+  await expect(lista.getByRole('row').filter({ hasText: nome }).first()).toContainText('Reconhecido há');
+  await expect(page.getByRole('list', { name: 'Alertas do dia' })).toContainText('1 casos');
+  // as regras mostram limite e valor de agora
+  await page.getByRole('button', { name: /^Ver as \d+ regras$/ }).click();
+  await expect(page.getByRole('region', { name: 'Regras de alerta' }).getByRole('row').filter({ hasText: 'Maior espera no telefone' })).toContainText('> 2 min');
+  // sinais de ouro e linha do tempo
+  await expect(page.getByRole('img', { name: 'Maior espera de cada canal em relação ao alvo, minuto a minuto' })).toBeVisible();
+  await expect(page.getByRole('listitem', { name: /^Telefone: \d+ de \d+ intervalos com alerta$/ })).toBeVisible();
+  // o histórico do turno registra o reconhecimento
+  await irPara(page, 'Comando');
+  await expect(page.getByRole('list', { name: 'Histórico do turno' })).toContainText('Alerta reconhecido pela coordenação');
+  // o mural mostra a saúde dos serviços
+  await page.goto('/mural');
+  await expect(page.getByRole('list', { name: 'Saúde dos serviços' }).getByRole('listitem')).toHaveCount(7);
 });

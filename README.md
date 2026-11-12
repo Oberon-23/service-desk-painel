@@ -9,6 +9,7 @@ Projeto de portfólio de [Breno Silva](https://github.com/Oberon-23). Mesma iden
 | Tela | O que tem |
 |---|---|
 | **Comando** | Cinco números do dia até agora (nível de serviço, fila, abandono, satisfação, N2 vencidos). A **sala em 3D** com uma raia de fila por canal e o nome de quem está em cada PA. O **copiloto**: regras que leem a operação e o modelo de fila e sugerem a próxima ação, com um clique para aplicar. **Treino de crise** (queda da VPN, pico, duas faltas) e o **histórico do turno**. |
+| **Monitoramento** | Visão de NOC: **saúde de 7 serviços** (a cor é o pior alerta aberto), **alertas ativos** com limite de atenção e crítico, reconhecimento e tempo aberto, **MTTA e MTTR**, os **sinais de ouro** das últimas 2 horas (volume contra o previsto, espera em relação ao alvo, abandono e nível de serviço, ocupação), a **linha do tempo do dia** em blocos de 10 minutos e as 12 regras com o valor de agora. |
 | **Filas** | Telefone, chat e portal, cada um com alvo próprio, histórico do dia e números do dia. **Quem atende o quê** (roteamento por habilidade, editável). Assuntos dos últimos 30 minutos e **chamados do N2** por prazo. |
 | **Analistas** | Aderência à escala, logar em PA, pausas com motivo e limite, e por pessoa: atendimentos, tempo médio, resolução no 1º contato, satisfação e ocupação. **Linha do tempo** do dia de cada um. |
 | **Planejamento** | **Hoje contra o previsto** (projeção do dia e horas com falta de gente), **E se…?** (Erlang C) e **Escala ideal** hora a hora. |
@@ -22,6 +23,7 @@ Pesquisa em ferramentas e guias de central de atendimento e service desk (Genesy
 
 - **Copiloto do supervisor:** priorizar o que é urgente, perceber pico de assunto antes que vire caos e sugerir a ação, em vez de só mostrar números.
 - **Gestão intradiária:** comparar o dia com o previsto e reprojetar o resto do dia, em vez de esperar o relatório do dia seguinte.
+- **Monitoramento de serviço** (ServiceNow, prática de NOC, sinais de ouro de SRE): saúde por serviço, alertas com limites e ciclo de vida (abre, piora, é reconhecido, normaliza), comparação com o previsto e uma linha do tempo como página de status.
 - **Painel enxuto:** só número que muda uma decisão do turno, e velocidade sempre ao lado de qualidade (nível de serviço com satisfação, tempo médio com resolução no primeiro contato).
 - **Backlog por prazo e roteamento por habilidade**, e um **mural** para a TV da sala com o que a equipe precisa ver de longe.
 

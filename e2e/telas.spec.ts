@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const TELAS = [['/', 'Comando'], ['/filas', 'Filas'], ['/analistas', 'Analistas'], ['/planejamento', 'Planejamento'], ['/planejamento?aba=ese', 'Planejamento'], ['/planejamento?aba=escala', 'Planejamento'], ['/mural', 'Service Desk'], ['/sobre', 'Sobre o projeto']] as const;
+const TELAS = [['/', 'Comando'], ['/monitoramento', 'Monitoramento'], ['/filas', 'Filas'], ['/analistas', 'Analistas'], ['/planejamento', 'Planejamento'], ['/planejamento?aba=ese', 'Planejamento'], ['/planejamento?aba=escala', 'Planejamento'], ['/mural', 'Service Desk'], ['/sobre', 'Sobre o projeto']] as const;
 
 function vigiar(page: Page) {
   const erros: string[] = [];
@@ -22,11 +22,11 @@ for (const [rota, titulo] of TELAS) {
   });
 }
 
-test('menu mostra as cinco seções sem rolar', async ({ page }) => {
+test('menu mostra as seis seções sem rolar', async ({ page }) => {
   await page.goto('/');
   const links = page.getByRole('navigation', { name: 'Seções do painel' }).getByRole('link');
-  await expect(links).toHaveCount(5);
-  for (let i = 0; i < 5; i++) {
+  await expect(links).toHaveCount(6);
+  for (let i = 0; i < 6; i++) {
     const b = (await links.nth(i).boundingBox())!;
     expect(b.x + b.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
   }
