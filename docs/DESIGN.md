@@ -82,7 +82,13 @@ Todos em `src/kit/tema.css`, no `:root` e nos blocos de tema. **Fora desses bloc
 
 **Cor nunca vai sozinha.** Toda situação tem texto ("Na meta", "Vencido há 1h40", "Em pausa") além da cor.
 
-### Tipografia: 8 tamanhos e o do mural
+### Tipografia: duas famílias, 9 tamanhos e o do mural
+
+- **Newsreader** (serifa, `--serif`): título de página, manchete e números grandes (indicadores, resumos, filas, mural). É onde o olho deve cair primeiro.
+- **Instrument Sans** (`--sans`): toda a interface. As duas fontes vêm do próprio site (`@fontsource`), por isso a política de segurança continua `font-src 'self'`.
+- Rótulos curtos em CAIXA ALTA sempre com `letter-spacing: .06em` (indicadores, cabeçalhos de tabela, resumos). Números com algarismos tabulares. Títulos com `text-wrap: balance`.
+- Tabelas sem grade: só um fio sob o cabeçalho e fios suaves entre linhas (regras de *Practical Typography*, Butterick).
+
 
 | Token | px | Uso |
 |---|---|---|
@@ -93,14 +99,17 @@ Todos em `src/kit/tema.css`, no `:root` e nos blocos de tema. **Fora desses bloc
 | `--fs-4` | 15 | Número de resumo |
 | `--fs-5` | 17 | Título de cartão e de seção |
 | `--fs-6` | 22 | Título de página |
-| `--fs-7` | 28 | Número de indicador |
+| `--fs-7` | 28 | Número de fila |
+| `--fs-8` | 34 | Título de página e número de indicador, em serifa |
 | `--fs-mural` | 30–64 | Número do mural, lido de longe (cresce com a tela) |
 
 Números em tabela e indicador usam `font-variant-numeric: tabular-nums`. Códigos (INC…, PA 03) usam `--mono`.
 
 ### Forma e espaço
 
-- **Raios:** `--r-xs` 4, `--r-sm` 8, `--r-md` 10, `--r-lg` 14 (cartões), `--r-pill` 999. Também valem `0` e `50%`.
+- **Raios:** `--r-xs` 4, `--r-sm` 8, `--r-md` 10, `--r-lg` 14, `--r-xl` 18 (cartões), `--r-pill` 999.
+- **Sombras:** `--shadow` (cartões, longa e difusa) e `--shadow-alto` (elementos sobre a página). No escuro, um fio de luz no topo em vez de sombra.
+- **Movimento:** cada tela entra com um deslize de 6 px em 0,32 s, escalonado por bloco; botões mudam cor em 0,15 s. Tudo desliga com `prefers-reduced-motion`. Também valem `0` e `50%`.
 - **Espaçamento:** múltiplos de 4 (`--s-1` 4 … `--s-8` 32). Entre cartões, 16. Dentro do cartão, 12 a 20.
 
 ## 5. Componentes
@@ -162,7 +171,14 @@ O alvo é WCAG 2.1 AA nos dois temas, testado pelo axe no CI.
 
 Nunca pode haver rolagem lateral. Os testes de ponta a ponta checam isso no celular.
 
-## 10. Como as regras são aplicadas
+## 10. Camadas de estilo
+
+- `src/kit/tema.css`: tokens, temas claro e escuro e componentes.
+- `src/kit/refino.css`: a camada editorial (fontes, números em serifa, respiro, sombras, tabelas, movimento, link “Pular para o conteúdo”). Carrega depois do tema.
+
+Referências usadas no refino: *Web Interface Guidelines* (Vercel), *design-audit* e *ui-typography* (Bencium, a partir de *Practical Typography*, de Matthew Butterick).
+
+## 11. Como as regras são aplicadas
 
 **`src/governanca.test.ts` (roda no CI) barra:**
 

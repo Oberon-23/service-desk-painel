@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 const raiz = new URL('.', import.meta.url).pathname;
 const arquivos = (dir: string, ext: RegExp): string[] =>
   readdirSync(dir).flatMap((n) => { const p = join(dir, n); return statSync(p).isDirectory() ? arquivos(p, ext) : ext.test(n) && !/\.test\.ts$/.test(n) ? [p] : []; });
-const css = readFileSync(join(raiz, 'kit/tema.css'), 'utf8');
+const css = readFileSync(join(raiz, 'kit/tema.css'), 'utf8') + readFileSync(join(raiz, 'kit/refino.css'), 'utf8');
 const codigo = arquivos(raiz, /\.(tsx?|ts)$/).map((p) => ({ p: p.replace(raiz, 'src/'), linhas: readFileSync(p, 'utf8').split('\n') }));
 const jsx = codigo.filter((f) => f.p.endsWith('.tsx'));
 const achar = (fs: typeof codigo, re: RegExp, ok: (l: string) => boolean = () => false) =>
@@ -45,12 +45,12 @@ describe('cores', () => {
 
 describe('tipografia e forma', () => {
   it('todo tamanho de fonte vem da escala --fs-*', () => {
-    const soltos = [...cssForaDosTokens(css).matchAll(/font-size:\s*([^;}]+)/g)].map((m) => m[1].trim()).filter((v) => !/^var\(--fs-([0-7]|mural)\)$|^[0-9.]+em$|^inherit$/.test(v));
+    const soltos = [...cssForaDosTokens(css).matchAll(/font-size:\s*([^;}]+)/g)].map((m) => m[1].trim()).filter((v) => !/^var\(--fs-([0-8]|mural)\)$|^[0-9.]+em$|^inherit$/.test(v));
     expect(soltos).toEqual([]);
   });
   it('todo raio vem dos tokens --r-*', () => {
     const soltos = [...cssForaDosTokens(css).matchAll(/border-radius:\s*([^;}]+)/g)].map((m) => m[1].trim())
-      .filter((v) => !v.split(/\s+/).every((x) => /^var\(--(r-(xs|sm|md|lg|pill)|radius)\)$|^0$|^50%$/.test(x)));
+      .filter((v) => !v.split(/\s+/).every((x) => /^var\(--(r-(xs|sm|md|lg|xl|pill)|radius)\)$|^0$|^50%$/.test(x)));
     expect(soltos).toEqual([]);
   });
   it('estilo inline não define cor, fonte ou espaçamento com número solto', () => {

@@ -62,6 +62,7 @@ export function Moldura({ produto, icone, visoes, asOf, rodape, extra }: {
 
   return (
     <>
+      <a className="pular" href="#conteudo">Pular para o conteúdo</a>
       <header className="topo">
         <div className="topo-in">
           <NavLink to="/" className="marca">
@@ -105,7 +106,7 @@ export function Moldura({ produto, icone, visoes, asOf, rodape, extra }: {
           )}
         </div>
       </div>
-      <main id="conteudo">
+      <main id="conteudo" tabIndex={-1}>
         <ProtecaoErro chave={pathname}><Suspense fallback={<p className="carregando" role="status">Carregando…</p>}><Outlet /></Suspense></ProtecaoErro>
       </main>
       <footer className="rodape">

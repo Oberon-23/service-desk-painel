@@ -1,0 +1,106 @@
+/* ==========================================================================
+   Rotalume · refino editorial
+   Camada visual sobre o tema: tipografia (Newsreader nos títulos e números,
+   Instrument Sans na interface), respiro, tabelas sem grade, movimento contido.
+   Regras de docs/DESIGN.md; não muda comportamento, só aparência.
+   ========================================================================== */
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource-variable/newsreader/opsz.css';
+
+:root {
+  --sans: 'Instrument Sans Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --serif: 'Newsreader Variable', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --fs-8: 34px; /* número de indicador e título de página, em serifa */
+  --r-xl: 18px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --shadow: 0 1px 1px rgb(27 29 36 / .03), 0 10px 28px -14px rgb(27 29 36 / .14);
+  --shadow-alto: 0 2px 4px rgb(27 29 36 / .04), 0 18px 40px -18px rgb(27 29 36 / .22);
+  --linha-suave: color-mix(in srgb, var(--line) 70%, transparent);
+}
+:root[data-theme='dark'] { --shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 12px 30px -16px rgb(0 0 0 / .6); --shadow-alto: 0 1px 0 rgb(255 255 255 / .04) inset, 0 20px 44px -18px rgb(0 0 0 / .7); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { --shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 12px 30px -16px rgb(0 0 0 / .6); --shadow-alto: 0 1px 0 rgb(255 255 255 / .04) inset, 0 20px 44px -18px rgb(0 0 0 / .7); }
+}
+
+/* ---------- texto ---------- */
+body {
+  font-family: var(--sans);
+  font-feature-settings: 'kern' 1, 'tnum' 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+::selection { background: var(--accent-soft); color: var(--ink); }
+h1, h2, h3, .manchete h2 { text-wrap: balance; }
+p, .card-sub, .card > .sub { text-wrap: pretty; }
+a, button, select, input, label, summary { touch-action: manipulation; }
+select { background-color: var(--surface); color: var(--ink); }
+
+/* títulos de página e números em serifa: o olho cai neles primeiro */
+.faixa-tit h1 { font-family: var(--serif); font-size: var(--fs-8); font-weight: 500; letter-spacing: -.02em; line-height: 1.05; font-optical-sizing: auto; }
+.faixa-tit p { margin-top: var(--s-1); }
+.faixa-in { padding-top: var(--s-5); padding-bottom: var(--s-4); }
+.manchete h2 { font-family: var(--serif); font-weight: 500; font-size: var(--fs-6); letter-spacing: -.01em; line-height: 1.25; }
+.kpi .k-val { font-family: var(--serif); font-weight: 500; font-size: var(--fs-8); letter-spacing: -.02em; line-height: 1.05; font-variant-numeric: lining-nums tabular-nums; }
+.kpi .k-val small { font-family: var(--sans); }
+.kpi .k-lab { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--muted); }
+.kpi { padding: var(--s-4) var(--s-5) var(--s-4); gap: var(--s-2); }
+
+/* ---------- cartões ---------- */
+.card { border-color: var(--linha-suave); border-radius: var(--r-xl); padding: var(--s-5) var(--s-6); box-shadow: var(--shadow); }
+.card-h { margin-bottom: var(--s-1); }
+.card h2 { font-size: var(--fs-5); font-weight: 600; letter-spacing: -.01em; }
+.card > .sub, .card-sub { max-width: 78ch; margin-bottom: var(--s-4); }
+main { gap: var(--s-6); padding-top: var(--s-6); }
+.topo { border-bottom-color: var(--linha-suave); }
+.faixa { border-bottom-color: var(--linha-suave); }
+.marca { font-weight: 600; letter-spacing: -.01em; }
+.nav a { font-size: var(--fs-3); font-weight: 500; transition: background-color .15s var(--ease), color .15s var(--ease); }
+.nav a[aria-current='page'] { font-weight: 600; }
+
+/* ---------- tabelas: sem grade, com respiro (Butterick) ---------- */
+th { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: .06em; border-bottom-color: var(--line-2); }
+td { border-bottom-color: var(--linha-suave); }
+
+/* ---------- controles ---------- */
+.btn, .btn-sec, .btn-pri, .btn-ic, .seg button, .tema button, .pill, .sd-pessoa, .aba, .link {
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease), box-shadow .15s var(--ease), transform .15s var(--ease);
+}
+.btn-pri:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+.btn-pri:active:not(:disabled), .btn:active, .btn-sec:active:not(:disabled) { transform: translateY(1px); }
+.btn-sec:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pill { letter-spacing: .01em; }
+
+/* ---------- movimento: cada tela entra com um deslize curto ---------- */
+@keyframes entrar { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+main > * { animation: entrar .32s var(--ease) both; }
+main > *:nth-child(2) { animation-delay: .03s; }
+main > *:nth-child(3) { animation-delay: .06s; }
+main > *:nth-child(4) { animation-delay: .09s; }
+main > *:nth-child(n + 5) { animation-delay: .12s; }
+@media (prefers-reduced-motion: reduce) {
+  main > * { animation: none; }
+  .btn, .btn-sec, .btn-pri, .btn-ic, .seg button, .tema button, .pill, .sd-pessoa, .aba, .link { transition: none; }
+}
+
+/* ---------- pular para o conteúdo ---------- */
+.pular { position: absolute; left: var(--s-4); top: -60px; z-index: 50; background: var(--accent); color: var(--accent-ink); padding: var(--s-2) var(--s-4); border-radius: var(--r-sm); font-weight: 600; text-decoration: none; }
+.pular:focus { top: var(--s-2); }
+main:focus { outline: none; }
+main:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+/* selo de situação sempre no mesmo lugar: o rótulo quebra linha, o selo fica à direita */
+.kpi .k-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--s-1) var(--s-2); min-height: 2.9em; } /* números alinhados na mesma linha */
+.kpi .k-top .pill { justify-self: end; }
+
+/* números de resumo, filas e mural também em serifa */
+.resumo b, .fila-agora b, .mural-bloco b { font-family: var(--serif); font-weight: 500; letter-spacing: -.015em; font-variant-numeric: lining-nums tabular-nums; }
+.resumo b { font-size: var(--fs-6); line-height: 1.15; }
+.resumo li { border-color: var(--linha-suave); border-radius: var(--r-md); padding: var(--s-3) var(--s-4); }
+.resumo span { text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.fila-card, .mural-bloco { border-color: var(--linha-suave); border-radius: var(--r-xl); box-shadow: var(--shadow); }
+.fila-card h3 { font-family: var(--sans); }
+.tabela-resp td.c-acoes .sel-pausa { width: auto; max-width: 132px; }
+.atencao-lista li { border-radius: var(--r-md); }
+.feed time, .mono { letter-spacing: 0; }
